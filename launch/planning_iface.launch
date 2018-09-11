@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="robot" default="iiwa" />
+  <arg name="headless" default="false"/>
+  <!-- call the path planner three times and take the median as duration -->
+  <arg name="run_three_times" default="false"/>
+  <arg name="grasp_object_dim_x" default="0.06" />
+  <arg name="grasp_object_dim_y" default="0.07" />
+  <arg name="grasp_object_dim_z" default="0.04" />
+  
+  <!-- Start 2D pose  -->
+  <arg name="start_pos_x" default="0.38" />
+  <arg name="start_pos_y" default="-0.5" />
+  <arg name="start_pos_theta" default="0.0" />
+  <!-- Goal 2D pose  -->
+  <arg name="goal_pos_x" default="0.38" />
+  <arg name="goal_pos_y" default="0.5" />
+  <arg name="goal_pos_theta" default="0.0" />
+
+
+  <!-- spawn grasp object in Gazebo -->
+  <param name="grasp_object_description" command="$(find xacro)/xacro --inorder $(find rll_planning_project)/urdf/grasp_object.urdf.xacro grasp_object_dim_x:=$(arg grasp_object_dim_x) grasp_object_dim_y:=$(arg grasp_object_dim_y) grasp_object_dim_z:=$(arg grasp_object_dim_z)" />
+  <!-- TODO: start orientation of the grasp object is not set here -->
+  <node name="grasp_object_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen" args="-urdf -param grasp_object_description -x $(arg start_pos_x) -y $(arg start_pos_y) -model grasp_object" />
+
+  <node ns="$(arg robot)" name="planning_iface" pkg="rll_planning_project" type="planning_iface" respawn="false" output="screen">
+    <param name="headless" value="$(arg headless)"/>
+    <param name="run_three_times" value="$(arg run_three_times)"/>
+    <param name="start_pos_x" value="$(arg start_pos_x)"/>
+    <param name="start_pos_y" value="$(arg start_pos_y)"/>
+    <param name="start_pos_theta" value="$(arg start_pos_theta)"/>
+    <param name="grasp_object_dim_x" value="$(arg grasp_object_dim_x)"/>
+    <param name="grasp_object_dim_y" value="$(arg grasp_object_dim_y)"/>
+    <param name="grasp_object_dim_z" value="$(arg grasp_object_dim_z)"/>
+    <param name="goal_pos_x" value="$(arg goal_pos_x)"/>
+    <param name="goal_pos_y" value="$(arg goal_pos_y)"/>
+    <param name="goal_pos_theta" value="$(arg goal_pos_theta)"/>
+  </node>
+
+</launch>

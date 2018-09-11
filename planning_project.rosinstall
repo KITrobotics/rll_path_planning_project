@@ -1,0 +1,2 @@
+- git: {local-name: rll_sdk, uri: 'https://github.com/KITrobotics/rll_sdk.git', version: master}
+- git: {local-name: rll_planning_project, uri: 'https://gitlab.ipr.kit.edu/rll/rll_planning_project.git', version: master}

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rll_planning_project</name>
+  <version>0.0.1</version>
+  <description>Path planning project for the Robot Learning Lab</description>
+
+  <maintainer email="wolfgang.wiedmeyer@kit.edu">Wolfgang Wiedmeyer</maintainer>
+
+  <license>GPLv3+</license>
+
+  <author email="wolfgang.wiedmeyer@kit.edu">Wolfgang Wiedmeyer</author>
+
+  <build_depend>message_generation</build_depend>
+  <depend>actionlib</depend>
+  <depend>actionlib_msgs</depend>
+  <depend>rll_msgs</depend>
+  <depend>rll_move</depend>
+  <exec_depend>message_runtime</exec_depend>
+  <buildtool_depend>catkin</buildtool_depend>
+
+</package>

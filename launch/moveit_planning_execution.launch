@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="description_file" default ="$(find rll_planning_project)/urdf/planning_env.urdf.xacro" />
+  <arg name="headless" default="false"/>
+
+  <!--  This loads the whole Moveit! setup -->
+  <include file="$(find rll_moveit_config)/launch/moveit_planning_execution.launch">
+    <arg name="description_file" value="$(arg description_file)" />
+    <arg name="headless" value="$(arg headless)" />
+    <arg name="rviz_config" value="$(find rll_planning_project)/launch/moveit.rviz" />
+  </include>
+
+</launch>

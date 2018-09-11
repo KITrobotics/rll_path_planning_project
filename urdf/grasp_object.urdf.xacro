@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="grasp_object">
+
+  <xacro:arg name="grasp_object_dim_x" default="0.06"/>
+  <xacro:arg name="grasp_object_dim_y" default="0.07"/>
+  <xacro:arg name="grasp_object_dim_z" default="0.04"/>
+
+  <link name="grasp_object">
+    <inertial>
+      <origin xyz="0 0 0" />
+      <mass value="0.2" />
+      <inertia  ixx="1" ixy="0"  ixz="0"  iyy="1"  iyz="0"  izz="1"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry>
+          <box size="$(arg grasp_object_dim_x) $(arg grasp_object_dim_y) $(arg grasp_object_dim_z)"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="$(arg grasp_object_dim_x) $(arg grasp_object_dim_y) $(arg grasp_object_dim_z)"/>
+      </geometry>
+    </collision>
+  </link>
+  <gazebo reference="grasp_object">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+</robot>

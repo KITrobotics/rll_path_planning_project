@@ -1,0 +1,4 @@
+geometry_msgs/Pose2D pose_start
+geometry_msgs/Pose2D pose_goal
+---
+bool valid
