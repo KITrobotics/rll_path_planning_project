@@ -30,7 +30,7 @@ A workspace with the project can be set up with:
 mkdir ~/catkin_ws
 cd ~/catkin_ws
 catkin_init_workspace
-wstool init src https://raw.githubusercontent.com/kitrobotics/rll_planning_project/master/planning_project.rosinstall
+wstool init src https://raw.githubusercontent.com/kitrobotics/rll_path_planning_project/master/planning_project.rosinstall
 catkin build
 source devel/setup.bash
 ```
