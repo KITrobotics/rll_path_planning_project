@@ -10,14 +10,14 @@
   <xacro:rll_cell hardware_interface="$(arg hardware_interface)" robot_name="$(arg robot_name)"/>
 
 
-  <!-- Inser the Maze -->
+  <!-- Insert the maze -->
 
-  <joint name="Maze" type="fixed">
+  <joint name="maze" type="fixed">
     <parent link="world" />
-    <child link="Maze" />
+    <child link="maze" />
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
-  <link name="Maze">
+  <link name="maze">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <mass value="1"/>
@@ -29,6 +29,12 @@
         <mesh filename="package://rll_planning_project/meshes/visual/Maze.dae" />
       </geometry>
     </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rll_planning_project/meshes/collision/Maze.stl" />
+      </geometry>
+    </collision>
   </link>
   
 

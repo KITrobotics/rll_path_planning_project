@@ -2,6 +2,7 @@
  * This file is part of the Robot Learning Lab Path Planning Project
  *
  * Copyright (C) 2018 Wolfgang Wiedmeyer <wolfgang.wiedmeyer@kit.edu>
+ * Copyright (C) 2019 Mark Weinreuter <uieai@student.kit.edu>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,60 +21,51 @@
 #ifndef RLL_PLANNING_PROJECT_IFACE_H
 #define RLL_PLANNING_PROJECT_IFACE_H
 
-#include <rll_move/move_iface.h>
+#include <rll_move/move_iface_base.h>
 #include <rll_planning_project/Move.h>
 #include <rll_planning_project/CheckPath.h>
 #include <rll_planning_project/PlanToGoalAction.h>
 
-class PlanningIface
+class PlanningIfaceBase
+    : public RLLMoveIfaceBase<rll_planning_project::PlanToGoalAction, rll_planning_project::PlanToGoalGoal>
 {
 public:
-	explicit PlanningIface(ros::NodeHandle nh);
+  explicit PlanningIfaceBase(ros::NodeHandle nh, const std::string& srv_name = "plan_to_goal");
 
-	RLLMoveIface move_iface;
+  bool moveSrv(rll_planning_project::Move::Request& req, rll_planning_project::Move::Response& resp);
+  bool checkPathSrv(rll_planning_project::CheckPath::Request& req, rll_planning_project::CheckPath::Response& resp);
+  void startServicesAndRunNode(ros::NodeHandle& nh) override;
 
-	void run_job(const rll_msgs::JobEnvGoalConstPtr &goal,
-		     RLLMoveIface::JobServer *as);
-	void job_idle(const rll_msgs::JobEnvGoalConstPtr &goal,
-		      RLLMoveIface::JobServer *as);
-	bool move(rll_planning_project::Move::Request &req,
-		  rll_planning_project::Move::Response &resp);
-	bool check_path(rll_planning_project::CheckPath::Request &req,
-			rll_planning_project::CheckPath::Response &resp);
-
-	~PlanningIface();
+protected:
+  RLLErrorCode idle() override;
+  void runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult& result) override;
+  void abortDueToCriticalFailure() override;
+  RLLErrorCode beforeMovementSrvChecks(const std::string& srv_name) override;
 
 private:
-	const float goal_tolerance_trans = 0.04;
-	const float goal_tolerance_rot = 10 * M_PI / 180;
-	const float vert_ground_clearance = 0.05;
-	const float vert_grip_height = 0.01;
-	const float pose_z_above_maze = 0.15;
-	const float plan_service_timeout = 8 * 60;
+  const float goal_tolerance_trans = 0.04;
+  const float goal_tolerance_rot = 10 * M_PI / 180;
+  const float vert_ground_clearance = 0.05;
+  const float vert_grip_height = 0.01;
+  const float pose_z_above_maze = 0.15;
+  const float plan_service_timeout = 8 * 60;
 
-	bool grasp_object_at_goal;
-	bool allowed_to_plan;
-	moveit_msgs::CollisionObject grasp_object;
-	geometry_msgs::Pose start_pose_grip, start_pose_above;
-	geometry_msgs::Pose goal_pose_grip, goal_pose_above;
-	geometry_msgs::Pose2D start_pose_2d, goal_pose_2d;
-	robot_state::RobotState* check_path_start_state;
-	const robot_state::JointModelGroup* manip_joint_model_group;
-	std::string eef_link;
+  bool grasp_object_at_goal;
+  bool allowed_to_plan;
+  moveit_msgs::CollisionObject grasp_object;
+  geometry_msgs::Pose start_pose_grip, start_pose_above;
+  geometry_msgs::Pose goal_pose_grip, goal_pose_above;
+  geometry_msgs::Pose2D start_pose_2d, goal_pose_2d;
+  robot_state::RobotState* check_path_start_state;
 
-	ros::NodeHandle nh_;
-	std::string node_name;
-	actionlib::SimpleActionClient<rll_planning_project::PlanToGoalAction>* plan_client_ptr;
-
-	bool run_planner_once(RLLMoveIface::JobServer *as,
-			      actionlib::SimpleActionClient<rll_planning_project::PlanToGoalAction> &plan_client,
-			      ros::Duration &planning_time);
-	bool idle();
-	bool reset_to_start();
-	bool check_goal_state();
-	void diff_current_state(const geometry_msgs::Pose2D pose_des, float &diff_trans, float &diff_rot,
-				geometry_msgs::Pose2D &pose2d_cur);
-	void pose2d_to_pose3d(geometry_msgs::Pose2D &pose2d, geometry_msgs::Pose &pose3d);
+  RLLErrorCode resetToStart();
+  bool runPlannerOnce(rll_msgs::JobEnvResult& result, ros::Duration& planning_time);
+  bool checkGoalState();
+  void diffCurrentState(const geometry_msgs::Pose2D pose_des, float& diff_trans, float& diff_rot,
+                        geometry_msgs::Pose2D& pose2d_cur);
+  void pose2dToPose3d(geometry_msgs::Pose2D& pose2d, geometry_msgs::Pose& pose3d);
+  void generateRotationWaypoints(const geometry_msgs::Pose2D& pose2d_start, float rot_step_size,
+                                 std::vector<geometry_msgs::Pose>& waypoints);
 };
 
 #endif  // RLL_PLANNING_PROJECT_IFACE_H

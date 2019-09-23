@@ -38,6 +38,6 @@ catkin_package(
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 
-add_executable(planning_iface src/planning_iface.cpp)
+add_executable(planning_iface src/planning_iface.cpp src/planning_iface_node.cpp)
 target_link_libraries(planning_iface ${catkin_LIBRARIES})
 add_dependencies(planning_iface ${PROJECT_NAME}_generate_messages_cpp)

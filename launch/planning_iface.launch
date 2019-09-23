@@ -9,14 +9,15 @@
   <arg name="grasp_object_dim_z" default="0.04" />
   
   <!-- Start 2D pose  -->
-  <arg name="start_pos_x" default="0.38" />
+  <arg name="start_pos_x" default="-0.37" />
   <arg name="start_pos_y" default="-0.5" />
   <arg name="start_pos_theta" default="0.0" />
   <!-- Goal 2D pose  -->
-  <arg name="goal_pos_x" default="0.38" />
-  <arg name="goal_pos_y" default="0.5" />
-  <arg name="goal_pos_theta" default="0.0" />
+  <arg name="goal_pos_x" default="-0.15" />
+  <arg name="goal_pos_y" default="0.44" />
+  <arg name="goal_pos_theta" default="1.57" />
 
+  <remap from="/gazebo/spawn_urdf_model" to="/$(arg robot)/gazebo/spawn_urdf_model" />
 
   <!-- spawn grasp object in Gazebo -->
   <param name="grasp_object_description" command="$(find xacro)/xacro --inorder $(find rll_planning_project)/urdf/grasp_object.urdf.xacro grasp_object_dim_x:=$(arg grasp_object_dim_x) grasp_object_dim_y:=$(arg grasp_object_dim_y) grasp_object_dim_z:=$(arg grasp_object_dim_z)" />
@@ -24,6 +25,8 @@
   <node name="grasp_object_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen" args="-urdf -param grasp_object_description -x $(arg start_pos_x) -y $(arg start_pos_y) -model grasp_object" />
 
   <node ns="$(arg robot)" name="planning_iface" pkg="rll_planning_project" type="planning_iface" respawn="false" output="screen">
+    <remap from="/use_sim_time" to="/$(arg robot)/use_sim_time" />
+    <remap from="/clock" to="/$(arg robot)/clock" />
     <param name="headless" value="$(arg headless)"/>
     <param name="run_three_times" value="$(arg run_three_times)"/>
     <param name="start_pos_x" value="$(arg start_pos_x)"/>

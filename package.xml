@@ -2,7 +2,7 @@
 <package format="2">
   <name>rll_planning_project</name>
   <version>0.0.1</version>
-  <description>Path planning project for the Robot Learning Lab</description>
+  <description>Path planning project for the KUKA Robot Learning Lab at KIT</description>
 
   <maintainer email="wolfgang.wiedmeyer@kit.edu">Wolfgang Wiedmeyer</maintainer>
 
