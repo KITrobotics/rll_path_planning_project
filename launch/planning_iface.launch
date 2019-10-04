@@ -27,6 +27,7 @@
   <node ns="$(arg robot)" name="planning_iface" pkg="rll_planning_project" type="planning_iface" respawn="false" output="screen">
     <remap from="/use_sim_time" to="/$(arg robot)/use_sim_time" />
     <remap from="/clock" to="/$(arg robot)/clock" />
+    <param name="no_gripper" value="false"/>
     <param name="headless" value="$(arg headless)"/>
     <param name="run_three_times" value="$(arg run_three_times)"/>
     <param name="start_pos_x" value="$(arg start_pos_x)"/>
@@ -38,6 +39,7 @@
     <param name="goal_pos_x" value="$(arg goal_pos_x)"/>
     <param name="goal_pos_y" value="$(arg goal_pos_y)"/>
     <param name="goal_pos_theta" value="$(arg goal_pos_theta)"/>
+    <param name="collision_link" value="maze" />
   </node>
 
 </launch>

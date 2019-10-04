@@ -40,7 +40,7 @@ protected:
   RLLErrorCode idle() override;
   void runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult& result) override;
   void abortDueToCriticalFailure() override;
-  RLLErrorCode beforeMovementSrvChecks(const std::string& srv_name) override;
+  RLLErrorCode beforeMovementServiceCall(const std::string& srv_name) override;
 
 private:
   const float goal_tolerance_trans = 0.04;

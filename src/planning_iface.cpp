@@ -115,8 +115,6 @@ PlanningIfaceBase::PlanningIfaceBase(ros::NodeHandle nh, const std::string& srv_
   disableCollision(grasp_object.id, ns_ + "_gripper_finger_left");
   disableCollision(grasp_object.id, ns_ + "_gripper_finger_right");
 
-  resetToHome();
-
   grasp_object_at_goal = false;
   allowed_to_plan = false;
 }
@@ -311,9 +309,9 @@ RLLErrorCode PlanningIfaceBase::idle()
   return RLLErrorCode::SUCCESS;
 }
 
-RLLErrorCode PlanningIfaceBase::beforeMovementSrvChecks(const std::string& srv_name)
+RLLErrorCode PlanningIfaceBase::beforeMovementServiceCall(const std::string& srv_name)
 {
-  RLLErrorCode error_code = RLLMoveIfaceBase::beforeMovementSrvChecks(srv_name);
+  RLLErrorCode error_code = RLLMoveIfaceBase::beforeMovementServiceCall(srv_name);
   if (error_code.failed())
   {
     return error_code;
@@ -322,7 +320,7 @@ RLLErrorCode PlanningIfaceBase::beforeMovementSrvChecks(const std::string& srv_n
   if (!allowed_to_plan)
   {
     ROS_WARN("Not allowed to plan and therefore not allowed to send move commands");
-    return RLLErrorCode::MOVEMENT_NOT_ALLOWED;
+    return RLLErrorCode::SERVICE_CALL_NOT_ALLOWED;
   }
 
   return error_code;
@@ -351,8 +349,9 @@ bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_pl
   float move_dist, dist_rot;
   const double EEF_STEP = 0.0005;
   const double JUMP_THRESHOLD = 4.5;
+  const std::string SRV_NAME = "move";
 
-  RLLErrorCode error_code = beforeMovementSrvChecks("move");
+  RLLErrorCode error_code = beforeMovementServiceCall(SRV_NAME);
   if (error_code.failed())
   {
     resp.success = false;
@@ -420,7 +419,9 @@ bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_pl
     return true;
   }
 
-  resp.success = true;
+  error_code = afterMovementServiceCall(SRV_NAME, error_code);
+
+  resp.success = error_code.succeeded();
   return true;
 }
 
@@ -686,6 +687,8 @@ void PlanningIfaceBase::startServicesAndRunNode(ros::NodeHandle& nh)
   spinner.start();
   PlanningIfaceBase* iface_ptr = this;
   RLLMoveIface* move_iface_ptr = iface_ptr;
+
+  iface_ptr->resetToHome();
 
   RLLMoveIface::JobServer server_job(nh, RLLMoveIface::RUN_JOB_SRV_NAME,
                                      boost::bind(&RLLMoveIface::runJobAction, move_iface_ptr, _1, &server_job), false);
