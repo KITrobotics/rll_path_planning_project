@@ -116,7 +116,7 @@ PlanningIfaceBase::PlanningIfaceBase(ros::NodeHandle nh, const std::string& srv_
   disableCollision(grasp_object.id, ns_ + "_gripper_finger_right");
 
   grasp_object_at_goal = false;
-  allowed_to_plan = false;
+  registerPermissions();
 }
 
 void PlanningIfaceBase::runJob(const rll_msgs::JobEnvGoalConstPtr& /*goal*/, rll_msgs::JobEnvResult& result)
@@ -235,7 +235,8 @@ bool PlanningIfaceBase::runPlannerOnce(rll_msgs::JobEnvResult& result, ros::Dura
   plan_req.goal.x = goal_pose_2d.x;
   plan_req.goal.y = goal_pose_2d.y;
   plan_req.goal.theta = goal_pose_2d.theta;
-  allowed_to_plan = true;
+
+  permissions_.updateCurrentPermissions(plan_permission_, true);
   ROS_INFO("calling the planning service\n");
   action_client_ptr_->sendGoal(plan_req);
 
@@ -246,7 +247,7 @@ bool PlanningIfaceBase::runPlannerOnce(rll_msgs::JobEnvResult& result, ros::Dura
 
   ROS_INFO("called the planning service, planning and moving took %d minutes and %d seconds",
            int(planning_time.toSec() / 60), int(fmod(planning_time.toSec(), 60)));
-  allowed_to_plan = false;
+  permissions_.updateCurrentPermissions(plan_permission_, false);
 
   success = checkGoalState();
   if (!success)
@@ -309,21 +310,14 @@ RLLErrorCode PlanningIfaceBase::idle()
   return RLLErrorCode::SUCCESS;
 }
 
-RLLErrorCode PlanningIfaceBase::beforeMovementServiceCall(const std::string& srv_name)
+void PlanningIfaceBase::registerPermissions()
 {
-  RLLErrorCode error_code = RLLMoveIfaceBase::beforeMovementServiceCall(srv_name);
-  if (error_code.failed())
-  {
-    return error_code;
-  }
+  plan_permission_ = permissions_.registerPermission("allowed_to_plan", false);
+  ROS_INFO("Added permission: %u", plan_permission_);
 
-  if (!allowed_to_plan)
-  {
-    ROS_WARN("Not allowed to plan and therefore not allowed to send move commands");
-    return RLLErrorCode::SERVICE_CALL_NOT_ALLOWED;
-  }
-
-  return error_code;
+  // change the permissions for moveSrv and checkPathSrv
+  permissions_.setRequiredPermissionsFor("move", plan_permission_, true);
+  permissions_.setRequiredPermissionsFor("check_path", plan_permission_, true);
 }
 
 void PlanningIfaceBase::generateRotationWaypoints(const geometry_msgs::Pose2D& pose2d_start, float rot_step_size,
@@ -341,6 +335,18 @@ void PlanningIfaceBase::generateRotationWaypoints(const geometry_msgs::Pose2D& p
 
 bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_planning_project::Move::Response& resp)
 {
+  return controlledMovementExecution(req, resp, "move", &PlanningIfaceBase::move);
+}
+
+void PlanningIfaceBase::cancelCurrentJob()
+{
+  action_client_ptr_->cancelAllGoals();
+  permissions_.updateCurrentPermissions(plan_permission_, false);
+}
+
+RLLErrorCode PlanningIfaceBase::move(rll_planning_project::Move::Request& req,
+                                     rll_planning_project::Move::Response& resp)
+{
   geometry_msgs::Pose pose3d_goal;
   geometry_msgs::Pose2D pose2d_cur;
   std::vector<geometry_msgs::Pose> waypoints;
@@ -349,14 +355,6 @@ bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_pl
   float move_dist, dist_rot;
   const double EEF_STEP = 0.0005;
   const double JUMP_THRESHOLD = 4.5;
-  const std::string SRV_NAME = "move";
-
-  RLLErrorCode error_code = beforeMovementServiceCall(SRV_NAME);
-  if (error_code.failed())
-  {
-    resp.success = false;
-    return true;
-  }
 
   // enforce a lower bound for move command to ensure that Moveit has enough waypoints
   diffCurrentState(req.pose, move_dist, dist_rot, pose2d_cur);
@@ -364,8 +362,8 @@ bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_pl
   {
     ROS_WARN("move commands that cover a distance between 0 and 5 mm or sole rotations less than 20 degrees are not "
              "supported!");
-    resp.success = false;
-    return true;
+    cancelCurrentJob();
+    return RLLErrorCode::TOO_FEW_WAYPOINTS;
   }
 
   if (move_dist < 0.0005)
@@ -384,9 +382,8 @@ bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_pl
   if (achieved < 1)
   {
     ROS_WARN("aborting, only achieved to compute %f of the requested move path", achieved);
-    abortDueToCriticalFailure();
-    resp.success = false;
-    return true;
+    cancelCurrentJob();
+    return RLLErrorCode::ONLY_PARTIAL_PATH_PLANNED;
   }
 
   if (trajectory.joint_trajectory.points.size() < 10)
@@ -395,56 +392,60 @@ bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_pl
               trajectory.joint_trajectory.points.size());
     ROS_ERROR("move dist %f, dist rot %f", move_dist, dist_rot);
     ROS_WARN("aborting...");
-    abortDueToCriticalFailure();
-    resp.success = false;
-    return true;
+    cancelCurrentJob();
+    return RLLErrorCode::TOO_FEW_WAYPOINTS;
   }
 
   bool success = modifyPtpTrajectory(trajectory);
   if (!success)
   {
-    ROS_ERROR("move service: time parametrization failed");
-    abortDueToCriticalFailure();
-    resp.success = false;
-    return true;
+    ROS_ERROR("move service: time parameterization failed");
+    cancelCurrentJob();
+    return RLLErrorCode::TRAJECTORY_MODIFICATION_FAILED;
   }
 
   my_plan.trajectory_ = trajectory;
-  success = (manip_move_group_.execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-  if (!success)
+  moveit::planning_interface::MoveItErrorCode moveit_error_code = manip_move_group_.execute(my_plan);
+
+  RLLErrorCode error_code = convertMoveItErrorCode(moveit_error_code);
+  if (error_code.failed())
   {
-    ROS_ERROR("path execution failed, aborting");
-    abortDueToCriticalFailure();
-    resp.success = false;
-    return true;
+    ROS_WARN("MoveIt plan execution failed: error code %s", stringifyMoveItErrorCodes(moveit_error_code));
+    cancelCurrentJob();
+    return error_code;
   }
 
-  error_code = afterMovementServiceCall(SRV_NAME, error_code);
-
-  resp.success = error_code.succeeded();
-  return true;
-}
-
-void PlanningIfaceBase::abortDueToCriticalFailure()
-{
-  RLLMoveIfaceBase::abortDueToCriticalFailure();
-  allowed_to_plan = false;
+  return RLLErrorCode::SUCCESS;
 }
 
 bool PlanningIfaceBase::checkPathSrv(rll_planning_project::CheckPath::Request& req,
                                      rll_planning_project::CheckPath::Response& resp)
+{
+  RLLErrorCode error_code = beforeNonMovementServiceCall("check_path");
+  if (error_code.succeeded())
+  {
+    checkPath(req, resp);
+  }
+
+  error_code = afterNonMovementServiceCall("check_path", error_code);
+
+  if (error_code.failed())
+  {
+    ROS_INFO("checkPathSrv call failed with: %s", error_code.message());
+    resp.valid = false;
+  }
+
+  return true;
+}
+
+bool PlanningIfaceBase::checkPath(rll_planning_project::CheckPath::Request& req,
+                                  rll_planning_project::CheckPath::Response& resp)
 {
   geometry_msgs::Pose pose3d_start, pose3d_goal;
   std::vector<geometry_msgs::Pose> waypoints;
   moveit_msgs::RobotTrajectory trajectory;
   const double EEF_STEP = 0.0005;
   const double JUMP_THRESHOLD = 4.5;
-
-  if (!allowed_to_plan)
-  {
-    ROS_WARN("Not allowed to request path checks");
-    return true;
-  }
 
   // enforce a lower bound for check_path requests to ensure that Moveit has enough waypoints
   float move_dist = sqrt(pow(req.pose_start.x - req.pose_goal.x, 2) + pow(req.pose_start.y - req.pose_goal.y, 2));
@@ -698,7 +699,8 @@ void PlanningIfaceBase::startServicesAndRunNode(ros::NodeHandle& nh)
   server_idle.start();
   ros::ServiceServer move = nh.advertiseService("move", &PlanningIfaceBase::moveSrv, iface_ptr);
   ros::ServiceServer check_path = nh.advertiseService("check_path", &PlanningIfaceBase::checkPathSrv, iface_ptr);
-  ros::ServiceServer robot_ready = nh.advertiseService("robot_ready", &RLLMoveIface::robotReadySrv, move_iface_ptr);
+  ros::ServiceServer robot_ready =
+      nh.advertiseService(RLLMoveIface::ROBOT_READY_SRV_NAME, &RLLMoveIface::robotReadySrv, move_iface_ptr);
 
   ROS_INFO("RLL Planning Interface started\n");
   ros::waitForShutdown();
