@@ -39,8 +39,11 @@ public:
 protected:
   RLLErrorCode idle() override;
   void runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult& result) override;
-  void abortDueToCriticalFailure() override;
-  RLLErrorCode beforeMovementServiceCall(const std::string& srv_name) override;
+  void cancelCurrentJob();
+  bool checkPath(rll_planning_project::CheckPath::Request& req, rll_planning_project::CheckPath::Response& resp);
+  RLLErrorCode move(rll_planning_project::Move::Request& req, rll_planning_project::Move::Response& resp);
+
+  void registerPermissions();
 
 private:
   const float goal_tolerance_trans = 0.04;
@@ -51,7 +54,7 @@ private:
   const float plan_service_timeout = 8 * 60;
 
   bool grasp_object_at_goal;
-  bool allowed_to_plan;
+  Permissions::Index plan_permission_;
   moveit_msgs::CollisionObject grasp_object;
   geometry_msgs::Pose start_pose_grip, start_pose_above;
   geometry_msgs::Pose goal_pose_grip, goal_pose_above;
