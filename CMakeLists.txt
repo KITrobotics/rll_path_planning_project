@@ -1,43 +1,51 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(rll_planning_project)
 
+# required for clang-tidy
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_options(-std=c++11)
 
+# Warnings
+add_definitions(-Wall -Wextra
+  -Wwrite-strings -Wunreachable-code -Wpointer-arith -Wredundant-decls)
+
 find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  message_generation
-  std_srvs
-  std_msgs
+  actionlib
   geometry_msgs
-  moveit_core
-  moveit_ros_planning
-  moveit_ros_planning_interface
-  rll_msgs
+  message_generation
   rll_move
-  genmsg actionlib_msgs actionlib
+  rll_move_client
+  rll_msgs
+  std_msgs
 )
 
 add_service_files(
   FILES
-  Move.srv
   CheckPath.srv
+  GetStartGoal.srv
+  Move.srv
 )
-
-add_action_files(DIRECTORY action FILES PlanToGoal.action)
 
 generate_messages(
   DEPENDENCIES
-  std_msgs
   geometry_msgs
-  actionlib_msgs
+  std_msgs
 )
 
 catkin_package(
-   CATKIN_DEPENDS message_runtime rll_msgs
+  CATKIN_DEPENDS geometry_msgs message_runtime rll_move_client rll_msgs std_msgs
 )
 
-include_directories(include ${catkin_INCLUDE_DIRS})
+include_directories(SYSTEM ${catkin_INCLUDE_DIRS})
+include_directories(include)
 
 add_executable(planning_iface src/planning_iface.cpp src/planning_iface_node.cpp)
 target_link_libraries(planning_iface ${catkin_LIBRARIES})
 add_dependencies(planning_iface ${PROJECT_NAME}_generate_messages_cpp)
+
+catkin_install_python(PROGRAMS scripts/path_planner.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+
+install(TARGETS planning_iface
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(DIRECTORY config launch meshes urdf DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

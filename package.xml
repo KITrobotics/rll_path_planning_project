@@ -11,10 +11,12 @@
   <author email="wolfgang.wiedmeyer@kit.edu">Wolfgang Wiedmeyer</author>
 
   <build_depend>message_generation</build_depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>actionlib</depend>
-  <depend>actionlib_msgs</depend>
   <depend>rll_msgs</depend>
   <depend>rll_move</depend>
+  <depend>rll_move_client</depend>
   <exec_depend>message_runtime</exec_depend>
   <buildtool_depend>catkin</buildtool_depend>
 
