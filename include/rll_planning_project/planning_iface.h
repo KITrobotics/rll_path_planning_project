@@ -24,13 +24,12 @@
 #include <rll_move/move_iface_base.h>
 #include <rll_planning_project/Move.h>
 #include <rll_planning_project/CheckPath.h>
-#include <rll_planning_project/PlanToGoalAction.h>
+#include <rll_planning_project/GetStartGoal.h>
 
-class PlanningIfaceBase
-    : public RLLMoveIfaceBase<rll_planning_project::PlanToGoalAction, rll_planning_project::PlanToGoalGoal>
+class PlanningIfaceBase : public RLLMoveIfaceBase
 {
 public:
-  explicit PlanningIfaceBase(ros::NodeHandle nh, const std::string& srv_name = "plan_to_goal");
+  explicit PlanningIfaceBase(const ros::NodeHandle& nh);
 
   bool moveSrv(rll_planning_project::Move::Request& req, rll_planning_project::Move::Response& resp);
   bool checkPathSrv(rll_planning_project::CheckPath::Request& req, rll_planning_project::CheckPath::Response& resp);
@@ -39,32 +38,36 @@ public:
 protected:
   RLLErrorCode idle() override;
   void runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult& result) override;
-  void cancelCurrentJob();
+  bool getStartGoalSrv(rll_planning_project::GetStartGoal::Request& req,
+                       rll_planning_project::GetStartGoal::Response& resp);
   bool checkPath(rll_planning_project::CheckPath::Request& req, rll_planning_project::CheckPath::Response& resp);
-  RLLErrorCode move(rll_planning_project::Move::Request& req, rll_planning_project::Move::Response& resp);
+  RLLErrorCode move(rll_planning_project::Move::Request& req, rll_planning_project::Move::Response& /*resp*/);
 
   void registerPermissions();
 
 private:
-  const float goal_tolerance_trans = 0.04;
-  const float goal_tolerance_rot = 10 * M_PI / 180;
-  const float vert_ground_clearance = 0.05;
-  const float vert_grip_height = 0.01;
-  const float pose_z_above_maze = 0.15;
-  const float plan_service_timeout = 8 * 60;
+  const std::string GET_START_GOAL_SRV_NAME = "get_start_goal";
+  const std::string MOVE_SRV_NAME = "move";
+  const std::string CHECK_PATH_SRV_NAME = "check_path";
 
-  bool grasp_object_at_goal;
+  const float GOAL_TOLERANCE_TRANS = 0.04;
+  const float GOAL_TOLERANCE_ROT = 10 * M_PI / 180;
+  const float VERT_GROUND_CLEARANCE = 0.05;
+  const float VERT_GRIP_HEIGHT = 0.01;
+  const float POSE_Z_ABOVE_MAZE = 0.15;
+
+  bool grasp_object_at_goal_;
   Permissions::Index plan_permission_;
-  moveit_msgs::CollisionObject grasp_object;
-  geometry_msgs::Pose start_pose_grip, start_pose_above;
-  geometry_msgs::Pose goal_pose_grip, goal_pose_above;
-  geometry_msgs::Pose2D start_pose_2d, goal_pose_2d;
-  robot_state::RobotState* check_path_start_state;
+  moveit_msgs::CollisionObject grasp_object_;
+  geometry_msgs::Pose start_pose_grip_, start_pose_above_;
+  geometry_msgs::Pose goal_pose_grip_, goal_pose_above_;
+  geometry_msgs::Pose2D start_pose_2d_, goal_pose_2d_;
+  robot_state::RobotState* check_path_start_state_;
 
   RLLErrorCode resetToStart();
-  bool runPlannerOnce(rll_msgs::JobEnvResult& result, ros::Duration& planning_time);
+  bool runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult& result);
   bool checkGoalState();
-  void diffCurrentState(const geometry_msgs::Pose2D pose_des, float& diff_trans, float& diff_rot,
+  void diffCurrentState(geometry_msgs::Pose2D pose_des, float& diff_trans, float& diff_rot,
                         geometry_msgs::Pose2D& pose2d_cur);
   void pose2dToPose3d(geometry_msgs::Pose2D& pose2d, geometry_msgs::Pose& pose3d);
   void generateRotationWaypoints(const geometry_msgs::Pose2D& pose2d_start, float rot_step_size,

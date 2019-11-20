@@ -1,5 +1,3 @@
-# based on: https://gitlab.ipr.kit.edu/IPR/intelligent_robotic_automation/blob/kinetic/.gitlab-ci.yml
-
 # The following block is needed for the shared Docker-based runner
 # For local runners you might want to enable the overlay driver:
 # https://docs.gitlab.com/ce/ci/docker/using_docker_build.html#using-the-overlayfs-driver
@@ -17,49 +15,65 @@ variables:
   UPSTREAM_WORKSPACE: "file"
 
   ROSINSTALL_FILENAME: ".ci.rosinstall"
-  ROS_DISTRO: "kinetic"
+  ROS_DISTRO: "melodic"
+  ROS_REPO: "ros"
 
   # install the rll_sdk
   ROSINSTALL_SDK: "- git: {local-name: rll_sdk, uri: 'https://gitlab.ipr.kit.edu/rll/rll_sdk.git', version: master}"
   ROSINSTALL_DEFAULT: ${ROSINSTALL_SDK}
 
-  # blacklist packages that should not be build
-  #CATKIN_CONFIG: '--blacklist gazebo_version_helpers, gazebo_grasp_plugin'
-
 
 before_script:
   - apk add --update bash coreutils tar # install industrial_ci dependencies
   - git clone --quiet --depth 1 https://github.com/ros-industrial/industrial_ci .industrial_ci
-# create the .rosinstall file IF it does not exist
+  # create the .rosinstall file if it does not exist
   - test ! -f ${ROSINSTALL_FILENAME} && echo ${ROSINSTALL_DEFAULT} >> ${ROSINSTALL_FILENAME}
   - sed -i 's/https\:\/\/gitlab\.ipr\.kit\.edu/https\:\/\/gitlab-ci-token\:'${CI_JOB_TOKEN}'\@gitlab\.ipr\.kit\.edu/g' ${CI_PROJECT_DIR}/${ROSINSTALL_FILENAME}
-# Download the .clang-format config IF it does not exist
+  # download config files if they do not exist
   - test ! -f .clang-format && wget https://gitlab.ipr.kit.edu/rll/rll_sdk/raw/master/.clang-format
+  - test ! -f .clang-tidy && wget https://gitlab.ipr.kit.edu/rll/rll_sdk/raw/master/.clang-tidy
+  - test ! -f .flake8 && wget https://gitlab.ipr.kit.edu/rll/rll_sdk/raw/master/.flake8
+  - test ! -f .pylintrc && wget https://gitlab.ipr.kit.edu/rll/rll_sdk/raw/master/.pylintrc
 
 
 # Format checks are run for every branch regardless of the ROS_DISTRO
 format-check:
   variables:
     # run clang format check
-    CLANG_FORMAT_VERSION: "3.9"
+    CLANG_FORMAT_VERSION: "6.0"
     CLANG_FORMAT_CHECK: "file"
+    AFTER_SCRIPT: "apt -yq install python-pip && pip -q install flake8 && python -m flake8"
   script: .industrial_ci/gitlab.sh
   tags:
     - docker # use docker runner
 
 
-kinetic-build:
-  # run default -> build
-  script: .industrial_ci/gitlab.sh
-  tags:
-    - docker
-
-
-melodic-build:
+kinetic-build-rostests:
   variables:
-    ROS_DISTRO: "melodic" # override ROS_DISTRO variable
+    ROS_DISTRO: "kinetic" # override ROS_DISTRO variable
   # run default -> build
   script: .industrial_ci/gitlab.sh
   tags:
     - docker
 
+
+melodic-build-rostests:
+  # run default -> build
+  script: .industrial_ci/gitlab.sh
+  tags:
+    - docker
+
+
+warningbuild-linting:
+  variables:
+    ADDITIONAL_DEBS: "python-pip clang-tidy-6.0 clang-6.0"
+    CATKIN_LINT: "pedantic"
+    CATKIN_LINT_ARGS: "--ignore unknown_package"
+    CATKIN_CONFIG: "--cmake-args -DCMAKE_CXX_FLAGS=-Werror"
+    NOT_TEST_BUILD: "true"
+    CLANG_TIDY_CMD: "run-clang-tidy-6.0.py -p /root/catkin_ws/build"
+    AFTER_SCRIPT: "${CLANG_TIDY_CMD}/rll_planning_project -header-filter=planning_iface* && pip -q install 'pylint<2.0.0' && . /root/catkin_ws/install/setup.bash && find * -iname '*.py' | xargs python -m pylint"
+  # run default -> build
+  script: .industrial_ci/gitlab.sh
+  tags:
+    - docker
