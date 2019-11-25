@@ -593,7 +593,7 @@ RLLErrorCode PlanningIfaceBase::resetToStart()
 
   move_ptp_req.pose = start_pose_above_;
   move_ptp_req.pose.position.z = POSE_Z_ABOVE_MAZE;
-  if (!poseGoalTooClose(current_pose, move_ptp_req.pose))
+  if (!poseGoalTooClose(move_ptp_req.pose))
   {
     error_code = movePTP(move_ptp_req, move_ptp_resp);
     if (error_code.failed())
