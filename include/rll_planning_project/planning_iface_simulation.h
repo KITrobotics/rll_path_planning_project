@@ -18,12 +18,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef RLL_PLANNING_PROJECT_IFACE_SIM_H
-#define RLL_PLANNING_PROJECT_IFACE_SIM_H
+#ifndef RLL_PLANNING_PROJECT_PLANNING_IFACE_SIMULATION_H
+#define RLL_PLANNING_PROJECT_PLANNING_IFACE_SIMULATION_H
 
 #include <rll_move/move_iface_simulation.h>
 #include <rll_planning_project/planning_iface.h>
 
 using PlanningIface = RLLCombinedMoveIface<PlanningIfaceBase, RLLSimulationMoveIface>;
 
-#endif  // RLL_PLANNING_PROJECT_IFACE_SIM_H
+#endif  // RLL_PLANNING_PROJECT_PLANNING_IFACE_SIMULATION_H

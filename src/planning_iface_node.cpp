@@ -25,7 +25,7 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "planning_iface");
   ros::NodeHandle nh;
   PlanningIface iface(nh);
-  iface.startServicesAndRunNode(nh);
+  iface.startServicesAndRunNode(&nh);
 
   return 0;
 }
