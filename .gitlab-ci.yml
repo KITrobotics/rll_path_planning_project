@@ -68,7 +68,7 @@ warningbuild-linting:
   variables:
     ADDITIONAL_DEBS: "python-pip clang-tidy-7 clang-7"
     CATKIN_LINT: "pedantic"
-    CATKIN_LINT_ARGS: "--ignore unknown_package"
+    CATKIN_LINT_ARGS: "--ignore unknown_package --ignore unknown_depend"
     CATKIN_CONFIG: "--cmake-args -DCMAKE_CXX_FLAGS=-Werror"
     NOT_TEST_BUILD: "true"
     CLANG_TIDY_CMD: "run-clang-tidy-7.py -p /root/catkin_ws/build"
