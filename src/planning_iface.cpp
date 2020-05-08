@@ -415,11 +415,12 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
   geometry_msgs::Pose pose3d_start, pose3d_goal;
   std::vector<geometry_msgs::Pose> waypoints;
   moveit_msgs::RobotTrajectory trajectory;
+  const double POSITIVE_ZERO = 1E-07;
 
   // enforce a lower bound for check_path requests to ensure that Moveit has enough waypoints
   float move_dist = sqrt(pow(req.pose_start.x - req.pose_goal.x, 2) + pow(req.pose_start.y - req.pose_goal.y, 2));
   float dist_rot = fabs(req.pose_start.theta - req.pose_goal.theta);
-  if ((move_dist < 0.005 && move_dist != 0) || (move_dist == 0 && dist_rot < 20 * M_PI / 180))
+  if ((move_dist < 0.005 && move_dist > POSITIVE_ZERO) || (move_dist <= POSITIVE_ZERO && dist_rot < 20 * M_PI / 180))
   {
     ROS_WARN("check path requests that cover a distance between 0 and 5 mm or sole rotations less than 20 degrees are "
              "not supported!");
@@ -428,7 +429,7 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
     return true;
   }
 
-  if (move_dist == 0)
+  if (move_dist <= POSITIVE_ZERO)
   {
     // generate more points here to ensure that there are at least ten
     // for the continuity check
