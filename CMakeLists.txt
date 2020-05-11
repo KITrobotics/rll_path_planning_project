@@ -1,14 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(rll_planning_project)
 
-# required for clang-tidy
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-add_compile_options(-std=c++11)
-
-# Warnings
-add_definitions(-Wall -Wextra
-  -Wwrite-strings -Wunreachable-code -Wpointer-arith -Wredundant-decls)
-
 find_package(catkin REQUIRED COMPONENTS
   actionlib
   geometry_msgs

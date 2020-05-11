@@ -18,29 +18,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <geometric_shapes/shape_operations.h>
 #include <tf/tf.h>
 #include <tf/transform_datatypes.h>
-#include <geometric_shapes/shape_operations.h>
 #include <visualization_msgs/Marker.h>
 
 #include <rll_planning_project/planning_iface.h>
 
 PlanningIfaceBase::PlanningIfaceBase(const ros::NodeHandle& nh) : RLLMoveIfaceBase(nh)
 {
-  shape_msgs::SolidPrimitive primitive;
-  geometry_msgs::Pose box_pose;
-  visualization_msgs::Marker marker;
-  float grasp_object_dim_x, grasp_object_dim_y, grasp_object_dim_z, start_pos_x, start_pos_y, start_pos_theta,
-      goal_pos_x, goal_pos_y, goal_pos_theta;
-  bool headless;
+  float start_pos_x, start_pos_y, start_pos_theta, goal_pos_x, goal_pos_y, goal_pos_theta;
 
-  ros::param::get(node_name_ + "/headless", headless);
   ros::param::get(node_name_ + "/start_pos_x", start_pos_x);
   ros::param::get(node_name_ + "/start_pos_y", start_pos_y);
   ros::param::get(node_name_ + "/start_pos_theta", start_pos_theta);
-  ros::param::get(node_name_ + "/grasp_object_dim_x", grasp_object_dim_x);
-  ros::param::get(node_name_ + "/grasp_object_dim_y", grasp_object_dim_y);
-  ros::param::get(node_name_ + "/grasp_object_dim_z", grasp_object_dim_z);
   ros::param::get(node_name_ + "/goal_pos_x", goal_pos_x);
   ros::param::get(node_name_ + "/goal_pos_y", goal_pos_y);
   ros::param::get(node_name_ + "/goal_pos_theta", goal_pos_theta);
@@ -49,17 +40,36 @@ PlanningIfaceBase::PlanningIfaceBase(const ros::NodeHandle& nh) : RLLMoveIfaceBa
   start_pose_2d_.x = start_pos_x;
   start_pose_2d_.y = start_pos_y;
   start_pose_2d_.theta = start_pos_theta;
-  pose2dToPose3d(start_pose_2d_, start_pose_above_);
-  pose2dToPose3d(start_pose_2d_, start_pose_grip_);
+  pose2dToPose3d(start_pose_2d_, &start_pose_above_);
+  pose2dToPose3d(start_pose_2d_, &start_pose_grip_);
   start_pose_grip_.position.z = VERT_GRIP_HEIGHT;
 
   // init goal poses
   goal_pose_2d_.x = goal_pos_x;
   goal_pose_2d_.y = goal_pos_y;
   goal_pose_2d_.theta = goal_pos_theta;
-  pose2dToPose3d(goal_pose_2d_, goal_pose_above_);
-  pose2dToPose3d(goal_pose_2d_, goal_pose_grip_);
+  pose2dToPose3d(goal_pose_2d_, &goal_pose_above_);
+  pose2dToPose3d(goal_pose_2d_, &goal_pose_grip_);
   goal_pose_grip_.position.z = VERT_GRIP_HEIGHT;
+
+  insertGraspObject();
+
+  grasp_object_at_goal_ = false;
+  registerPermissions();
+}
+
+void PlanningIfaceBase::insertGraspObject()
+{
+  shape_msgs::SolidPrimitive primitive;
+  geometry_msgs::Pose box_pose;
+  visualization_msgs::Marker marker;
+  float grasp_object_dim_x, grasp_object_dim_y, grasp_object_dim_z;
+  bool headless;
+
+  ros::param::get(node_name_ + "/headless", headless);
+  ros::param::get(node_name_ + "/grasp_object_dim_x", grasp_object_dim_x);
+  ros::param::get(node_name_ + "/grasp_object_dim_y", grasp_object_dim_y);
+  ros::param::get(node_name_ + "/grasp_object_dim_z", grasp_object_dim_z);
 
   // add the grasp object as a collision object into the scene
   grasp_object_.header.frame_id = manip_move_group_.getPlanningFrame();
@@ -111,12 +121,9 @@ PlanningIfaceBase::PlanningIfaceBase(const ros::NodeHandle& nh) : RLLMoveIfaceBa
   planning_scene_interface_.applyCollisionObject(grasp_object_);
   // allow these collisions for collision checks in the move iface
   disableCollision(grasp_object_.id, "table");
-
-  grasp_object_at_goal_ = false;
-  registerPermissions();
 }
 
-void PlanningIfaceBase::runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult& result)
+void PlanningIfaceBase::runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult* result)
 {
   bool run_three_times = false;
   int num_runs = 1;
@@ -147,7 +154,7 @@ void PlanningIfaceBase::runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msg
       error_code = idle();
       if (error_code.failed())
       {
-        result.job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
+        result->job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
         return;
       }
     }
@@ -169,12 +176,12 @@ void PlanningIfaceBase::runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msg
   rll_msgs::JobExtraField job_data;
   job_data.description = "duration";
   job_data.value = planning_time_final;
-  result.job_data.push_back(job_data);
+  result->job_data.push_back(job_data);
 
-  result.job.status = rll_msgs::JobStatus::SUCCESS;
+  result->job.status = rll_msgs::JobStatus::SUCCESS;
 }
 
-bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult& result)
+bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult* result)
 {
   rll_msgs::MovePTP::Request move_ptp_req;
   rll_msgs::MovePTP::Response move_ptp_resp;
@@ -195,23 +202,23 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
   // pick up the grasp object
   move_ptp_req.pose = start_pose_above_;
   move_ptp_req.pose.position.z = POSE_Z_ABOVE_MAZE;
-  RLLErrorCode error_code = movePTP(move_ptp_req, move_ptp_resp);
+  RLLErrorCode error_code = movePTP(move_ptp_req, &move_ptp_resp);
   if (error_code.failed())
   {
     ROS_FATAL("Moving PTP above grasp object failed");
-    result.job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
+    result->job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
     return false;
   }
 
   pick_place_req.pose_above = start_pose_above_;
   pick_place_req.pose_grip = start_pose_grip_;
-  pick_place_req.gripper_close = true;
+  pick_place_req.gripper_close = RLL_SRV_TRUE;
   pick_place_req.grasp_object = grasp_object_.id;
-  error_code = pickPlace(pick_place_req, pick_place_resp);
+  error_code = pickPlace(pick_place_req, &pick_place_resp);
   if (error_code.failed())
   {
     ROS_FATAL("Failed to pick up the grasp object!");
-    result.job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
+    result->job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
     return false;
   }
 
@@ -238,13 +245,13 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
   success = checkGoalState();
   if (!success)
   {
-    result.job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
+    result->job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
     return false;
   }
 
   if (!grasp_object_at_goal_)
   {
-    result.job.status = rll_msgs::JobStatus::FAILURE;
+    result->job.status = rll_msgs::JobStatus::FAILURE;
     return false;
   }
 
@@ -264,7 +271,7 @@ RLLErrorCode PlanningIfaceBase::idle()
     // pick up the grasp object
     move_ptp_req.pose = goal_pose_above_;
     move_ptp_req.pose.position.z = POSE_Z_ABOVE_MAZE;
-    error_code = movePTP(move_ptp_req, move_ptp_resp);
+    error_code = movePTP(move_ptp_req, &move_ptp_resp);
     if (error_code.failed())
     {
       ROS_ERROR("Moving PTP above goal pos for reset failed");
@@ -273,9 +280,9 @@ RLLErrorCode PlanningIfaceBase::idle()
 
     pick_place_req.pose_above = goal_pose_above_;
     pick_place_req.pose_grip = goal_pose_grip_;
-    pick_place_req.gripper_close = true;
+    pick_place_req.gripper_close = RLL_SRV_TRUE;
     pick_place_req.grasp_object = grasp_object_.id;
-    error_code = pickPlace(pick_place_req, pick_place_resp);
+    error_code = pickPlace(pick_place_req, &pick_place_resp);
     if (error_code.failed())
     {
       ROS_ERROR("Failed to pick up the grasp object at the goal!");
@@ -306,15 +313,15 @@ void PlanningIfaceBase::registerPermissions()
 }
 
 void PlanningIfaceBase::generateRotationWaypoints(const geometry_msgs::Pose2D& pose2d_start, float rot_step_size,
-                                                  std::vector<geometry_msgs::Pose>& waypoints)
+                                                  std::vector<geometry_msgs::Pose>* waypoints)
 {
   geometry_msgs::Pose pose3d_rot;
   geometry_msgs::Pose2D pose2d_rot = pose2d_start;
   for (int i = 0; i < 9; ++i)
   {
     pose2d_rot.theta += rot_step_size;
-    pose2dToPose3d(pose2d_rot, pose3d_rot);
-    waypoints.push_back(pose3d_rot);
+    pose2dToPose3d(pose2d_rot, &pose3d_rot);
+    waypoints->push_back(pose3d_rot);
   }
 }
 
@@ -331,17 +338,17 @@ bool PlanningIfaceBase::getStartGoalSrv(rll_planning_project::GetStartGoal::Requ
 
   error_code = afterNonMovementServiceCall(GET_START_GOAL_SRV_NAME, error_code);
   resp.error_code = error_code.value();
-  resp.success = error_code.succeeded();
+  resp.success = error_code.succeededSrv();
   return true;
 }
 
 bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_planning_project::Move::Response& resp)
 {
-  return controlledMovementExecution(req, resp, MOVE_SRV_NAME, &PlanningIfaceBase::move);
+  return controlledMovementExecution(req, &resp, MOVE_SRV_NAME, &PlanningIfaceBase::move);
 }
 
-RLLErrorCode PlanningIfaceBase::move(rll_planning_project::Move::Request& req,
-                                     rll_planning_project::Move::Response& /*resp*/)
+RLLErrorCode PlanningIfaceBase::move(const rll_planning_project::Move::Request& req,
+                                     rll_planning_project::Move::Response* /*resp*/)
 {
   geometry_msgs::Pose pose3d_goal;
   geometry_msgs::Pose2D pose2d_cur;
@@ -350,7 +357,7 @@ RLLErrorCode PlanningIfaceBase::move(rll_planning_project::Move::Request& req,
   float move_dist, dist_rot;
 
   // enforce a lower bound for move command to ensure that Moveit has enough waypoints
-  diffCurrentState(req.pose, move_dist, dist_rot, pose2d_cur);
+  diffCurrentState(req.pose, &move_dist, &dist_rot, &pose2d_cur);
   if ((move_dist < 0.005 && move_dist > DEFAULT_LINEAR_EEF_STEP) ||
       (move_dist < DEFAULT_LINEAR_EEF_STEP && dist_rot < 20 * M_PI / 180))
   {
@@ -364,14 +371,14 @@ RLLErrorCode PlanningIfaceBase::move(rll_planning_project::Move::Request& req,
     // generate more rotation points here to ensure that there are at least ten
     // for the continuity check
     float rot_step_size = (pose2d_cur.theta - req.pose.theta) / LINEAR_MIN_STEPS_FOR_JUMP_THRESH;
-    generateRotationWaypoints(pose2d_cur, rot_step_size, waypoints);
+    generateRotationWaypoints(pose2d_cur, rot_step_size, &waypoints);
   }
 
   ROS_INFO("move request to pos x=%.3f y=%.3f theta=%.3f", req.pose.x, req.pose.y, req.pose.theta);
   manip_move_group_.setStartStateToCurrentState();
-  pose2dToPose3d(req.pose, pose3d_goal);
+  pose2dToPose3d(req.pose, &pose3d_goal);
   waypoints.push_back(pose3d_goal);
-  RLLErrorCode error_code = computeLinearPath(waypoints, trajectory);
+  RLLErrorCode error_code = computeLinearPath(waypoints, &trajectory);
   if (error_code.failed())
   {
     ROS_ERROR("computing path failed, move dist %f, dist rot %f", move_dist, dist_rot);
@@ -387,7 +394,7 @@ bool PlanningIfaceBase::checkPathSrv(rll_planning_project::CheckPath::Request& r
   RLLErrorCode error_code = beforeNonMovementServiceCall(CHECK_PATH_SRV_NAME);
   if (error_code.succeeded())
   {
-    checkPath(req, resp);
+    checkPath(req, &resp);
   }
 
   error_code = afterNonMovementServiceCall(CHECK_PATH_SRV_NAME, error_code);
@@ -395,48 +402,50 @@ bool PlanningIfaceBase::checkPathSrv(rll_planning_project::CheckPath::Request& r
   if (error_code.failed())
   {
     ROS_INFO("checkPathSrv call failed with: %s", error_code.message());
-    resp.valid = false;
   }
+
+  resp.valid = error_code.succeededSrv();
 
   return true;
 }
 
-bool PlanningIfaceBase::checkPath(rll_planning_project::CheckPath::Request& req,
-                                  rll_planning_project::CheckPath::Response& resp)
+bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request& req,
+                                  rll_planning_project::CheckPath::Response* resp)
 {
   geometry_msgs::Pose pose3d_start, pose3d_goal;
   std::vector<geometry_msgs::Pose> waypoints;
   moveit_msgs::RobotTrajectory trajectory;
+  const double POSITIVE_ZERO = 1E-07;
 
   // enforce a lower bound for check_path requests to ensure that Moveit has enough waypoints
   float move_dist = sqrt(pow(req.pose_start.x - req.pose_goal.x, 2) + pow(req.pose_start.y - req.pose_goal.y, 2));
   float dist_rot = fabs(req.pose_start.theta - req.pose_goal.theta);
-  if ((move_dist < 0.005 && move_dist != 0) || (move_dist == 0 && dist_rot < 20 * M_PI / 180))
+  if ((move_dist < 0.005 && move_dist > POSITIVE_ZERO) || (move_dist <= POSITIVE_ZERO && dist_rot < 20 * M_PI / 180))
   {
     ROS_WARN("check path requests that cover a distance between 0 and 5 mm or sole rotations less than 20 degrees are "
              "not supported!");
     ROS_WARN("Moving distance would have been %f m", move_dist);
-    resp.valid = false;
+    resp->valid = RLL_SRV_FALSE;
     return true;
   }
 
-  if (move_dist == 0)
+  if (move_dist <= POSITIVE_ZERO)
   {
     // generate more points here to ensure that there are at least ten
     // for the continuity check
     float rot_step_size = (req.pose_start.theta - req.pose_goal.theta) / LINEAR_MIN_STEPS_FOR_JUMP_THRESH;
-    generateRotationWaypoints(req.pose_start, rot_step_size, waypoints);
+    generateRotationWaypoints(req.pose_start, rot_step_size, &waypoints);
   }
 
-  pose2dToPose3d(req.pose_start, pose3d_start);
-  pose2dToPose3d(req.pose_goal, pose3d_goal);
+  pose2dToPose3d(req.pose_start, &pose3d_start);
+  pose2dToPose3d(req.pose_goal, &pose3d_goal);
 
   bool start_pose_valid = check_path_start_state_->setFromIK(manip_joint_model_group_, pose3d_start,
                                                              manip_move_group_.getEndEffectorLink());
 
   if (!start_pose_valid)
   {
-    resp.valid = false;
+    resp->valid = RLL_SRV_FALSE;
     return true;
   }
 
@@ -447,7 +456,7 @@ bool PlanningIfaceBase::checkPath(rll_planning_project::CheckPath::Request& req,
                                                            DEFAULT_LINEAR_JUMP_THRESHOLD, trajectory);
   if (achieved < 1)
   {
-    resp.valid = false;
+    resp->valid = RLL_SRV_FALSE;
     return true;
   }
 
@@ -456,11 +465,11 @@ bool PlanningIfaceBase::checkPath(rll_planning_project::CheckPath::Request& req,
     ROS_ERROR("trajectory has not enough points to check for continuity, only got %lu",
               trajectory.joint_trajectory.points.size());
     ROS_ERROR("move dist %f, dist rot %f", move_dist, dist_rot);
-    resp.valid = false;
+    resp->valid = RLL_SRV_FALSE;
     return true;
   }
 
-  resp.valid = true;
+  resp->valid = RLL_SRV_TRUE;
   return true;
 }
 
@@ -478,7 +487,7 @@ bool PlanningIfaceBase::checkGoalState()
   RLLErrorCode error_code;
 
   // check if we are close enough to the goal
-  diffCurrentState(goal_pose_2d_, dist_goal_trans, diff_goal_angle, pose2d_cur);
+  diffCurrentState(goal_pose_2d_, &dist_goal_trans, &diff_goal_angle, &pose2d_cur);
 
   if (dist_goal_trans < GOAL_TOLERANCE_TRANS && diff_goal_angle < GOAL_TOLERANCE_ROT)
   {
@@ -501,10 +510,10 @@ bool PlanningIfaceBase::checkGoalState()
     // place the object at the goal
     pick_place_req.pose_above = goal_pose_above_;
     pick_place_req.pose_grip = goal_pose_grip_;
-    pick_place_req.gripper_close = false;
+    pick_place_req.gripper_close = RLL_SRV_FALSE;
     pick_place_req.grasp_object = grasp_object_.id;
 
-    error_code = pickPlace(pick_place_req, pick_place_resp);
+    error_code = pickPlace(pick_place_req, &pick_place_resp);
     if (error_code.failed())
     {
       ROS_FATAL("Failed to place the grasp object at the goal!");
@@ -515,7 +524,7 @@ bool PlanningIfaceBase::checkGoalState()
 
     // move a little higher after placing the object
     move_lin_req.pose = reset_above_goal;
-    moveLin(move_lin_req, move_lin_resp);
+    moveLin(move_lin_req, &move_lin_resp);
     if (error_code.failed())
     {
       ROS_FATAL("Moving above maze for reset to home failed");
@@ -539,12 +548,12 @@ bool PlanningIfaceBase::checkGoalState()
   return true;
 }
 
-void PlanningIfaceBase::diffCurrentState(const geometry_msgs::Pose2D pose_des, float& diff_trans, float& diff_rot,
-                                         geometry_msgs::Pose2D& pose2d_cur)
+void PlanningIfaceBase::diffCurrentState(const geometry_msgs::Pose2D& pose_des, float* diff_trans, float* diff_rot,
+                                         geometry_msgs::Pose2D* pose2d_cur)
 {
   geometry_msgs::Pose current_pose = manip_move_group_.getCurrentPose().pose;
 
-  diff_trans = sqrt(pow(current_pose.position.x - pose_des.x, 2) + pow(current_pose.position.y - pose_des.y, 2));
+  *diff_trans = sqrt(pow(current_pose.position.x - pose_des.x, 2) + pow(current_pose.position.y - pose_des.y, 2));
 
   tf::Quaternion q_current, q_orig, q_rot;
   // orientation of eef in home position
@@ -564,11 +573,11 @@ void PlanningIfaceBase::diffCurrentState(const geometry_msgs::Pose2D pose_des, f
   {
     yaw = 0;
   }
-  diff_rot = fabs(yaw - pose_des.theta);
+  *diff_rot = fabs(yaw - pose_des.theta);
 
-  pose2d_cur.x = current_pose.position.x;
-  pose2d_cur.y = current_pose.position.y;
-  pose2d_cur.theta = yaw;
+  pose2d_cur->x = current_pose.position.x;
+  pose2d_cur->y = current_pose.position.y;
+  pose2d_cur->theta = yaw;
 }
 
 RLLErrorCode PlanningIfaceBase::resetToStart()
@@ -584,7 +593,7 @@ RLLErrorCode PlanningIfaceBase::resetToStart()
   // set this a little higher to make sure we are moving above the maze
   current_pose.position.z = POSE_Z_ABOVE_MAZE;
   move_lin_req.pose = current_pose;
-  RLLErrorCode error_code = moveLin(move_lin_req, move_lin_resp);
+  RLLErrorCode error_code = moveLin(move_lin_req, &move_lin_resp);
   if (error_code.failed())
   {
     ROS_FATAL("Moving above maze for reset failed");
@@ -595,7 +604,7 @@ RLLErrorCode PlanningIfaceBase::resetToStart()
   move_ptp_req.pose.position.z = POSE_Z_ABOVE_MAZE;
   if (!poseGoalTooClose(move_ptp_req.pose))
   {
-    error_code = movePTP(move_ptp_req, move_ptp_resp);
+    error_code = movePTP(move_ptp_req, &move_ptp_resp);
     if (error_code.failed())
     {
       ROS_FATAL("Moving above start pos for reset failed");
@@ -606,9 +615,9 @@ RLLErrorCode PlanningIfaceBase::resetToStart()
   pick_place_req.pose_above = start_pose_above_;
   pick_place_req.pose_above.position.z = POSE_Z_ABOVE_MAZE;
   pick_place_req.pose_grip = start_pose_grip_;
-  pick_place_req.gripper_close = false;
+  pick_place_req.gripper_close = RLL_SRV_FALSE;
   pick_place_req.grasp_object = grasp_object_.id;
-  error_code = pickPlace(pick_place_req, pick_place_resp);
+  error_code = pickPlace(pick_place_req, &pick_place_resp);
   if (error_code.failed())
   {
     ROS_FATAL("Failed to place the grasp object at the start pos");
@@ -625,13 +634,13 @@ RLLErrorCode PlanningIfaceBase::resetToStart()
   return RLLErrorCode::SUCCESS;
 }
 
-void PlanningIfaceBase::pose2dToPose3d(geometry_msgs::Pose2D& pose2d, geometry_msgs::Pose& pose3d)
+void PlanningIfaceBase::pose2dToPose3d(const geometry_msgs::Pose2D& pose2d, geometry_msgs::Pose* pose3d)
 {
   tf::Quaternion q_orig, q_rot, q_new;
 
-  pose3d.position.x = pose2d.x;
-  pose3d.position.y = pose2d.y;
-  pose3d.position.z = VERT_GROUND_CLEARANCE;
+  pose3d->position.x = pose2d.x;
+  pose3d->position.y = pose2d.y;
+  pose3d->position.z = VERT_GROUND_CLEARANCE;
 
   // orientation of eef in home position
   q_orig[0] = q_orig[2] = q_orig[3] = 0;
@@ -640,10 +649,10 @@ void PlanningIfaceBase::pose2dToPose3d(geometry_msgs::Pose2D& pose2d, geometry_m
   q_rot = tf::createQuaternionFromRPY(0, 0, pose2d.theta);
   q_new = q_rot * q_orig;
   q_new.normalize();
-  quaternionTFToMsg(q_new, pose3d.orientation);
+  quaternionTFToMsg(q_new, pose3d->orientation);
 }
 
-void PlanningIfaceBase::startServicesAndRunNode(ros::NodeHandle& nh)
+void PlanningIfaceBase::startServicesAndRunNode(ros::NodeHandle* nh)
 {
   ros::AsyncSpinner spinner(0);
   spinner.start();
@@ -653,22 +662,23 @@ void PlanningIfaceBase::startServicesAndRunNode(ros::NodeHandle& nh)
 
   iface_ptr->resetToHome();
 
-  RLLMoveIfaceBase::JobServer server_job(nh, RLLMoveIfaceBase::RUN_JOB_SRV_NAME,
-                                         boost::bind(&RLLMoveIfaceBase::runJobAction, iface_ptr, _1, &server_job),
-                                         false);
+  RLLMoveIfaceBase::JobServer server_job(  // NOLINT clang-analyzer-optin.cplusplus.VirtualCall
+      *nh, RLLMoveIfaceBase::RUN_JOB_SRV_NAME, boost::bind(&RLLMoveIfaceBase::runJobAction, iface_ptr, _1, &server_job),
+      false);
   server_job.start();
-  RLLMoveIfaceBase::JobServer server_idle(nh, RLLMoveIfaceBase::IDLE_JOB_SRV_NAME,
+  RLLMoveIfaceBase::JobServer server_idle(*nh, RLLMoveIfaceBase::IDLE_JOB_SRV_NAME,
                                           boost::bind(&RLLMoveIfaceBase::idleAction, iface_ptr, _1, &server_idle),
                                           false);
   server_idle.start();
-  ros::ServiceServer move = nh.advertiseService(MOVE_SRV_NAME, &PlanningIfaceBase::moveSrv, iface_ptr);
-  ros::ServiceServer check_path = nh.advertiseService(CHECK_PATH_SRV_NAME, &PlanningIfaceBase::checkPathSrv, iface_ptr);
+  ros::ServiceServer move = nh->advertiseService(MOVE_SRV_NAME, &PlanningIfaceBase::moveSrv, iface_ptr);
+  ros::ServiceServer check_path =
+      nh->advertiseService(CHECK_PATH_SRV_NAME, &PlanningIfaceBase::checkPathSrv, iface_ptr);
   ros::ServiceServer get_start_goal =
-      nh.advertiseService(GET_START_GOAL_SRV_NAME, &PlanningIfaceBase::getStartGoalSrv, iface_ptr);
-  ros::ServiceServer robot_ready = nh.advertiseService(RLLMoveIfaceServices::ROBOT_READY_SRV_NAME,
-                                                       &RLLMoveIfaceServices::robotReadySrv, move_iface_ptr);
+      nh->advertiseService(GET_START_GOAL_SRV_NAME, &PlanningIfaceBase::getStartGoalSrv, iface_ptr);
+  ros::ServiceServer robot_ready = nh->advertiseService(RLLMoveIfaceServices::ROBOT_READY_SRV_NAME,
+                                                        &RLLMoveIfaceServices::robotReadySrv, move_iface_ptr);
   ros::ServiceServer job_finished =
-      nh.advertiseService(RLLMoveIfaceBase::JOB_FINISHED_SRV_NAME, &RLLMoveIfaceBase::jobFinishedSrv, base_iface_ptr);
+      nh->advertiseService(RLLMoveIfaceBase::JOB_FINISHED_SRV_NAME, &RLLMoveIfaceBase::jobFinishedSrv, base_iface_ptr);
 
   ROS_INFO("RLL Planning Interface started\n");
   ros::waitForShutdown();
