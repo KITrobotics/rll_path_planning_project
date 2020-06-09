@@ -12,23 +12,24 @@ services:
 # This config ensures that the temp folder is located inside the project directory (e.g. for prerelease tests or SSH agent forwarding)
 variables:
   TMPDIR: "${CI_PROJECT_DIR}.tmp"
-  UPSTREAM_WORKSPACE: "file"
 
-  ROSINSTALL_FILENAME: ".ci.rosinstall"
+  # Create a upstream workspace with the dependencies from the specified rosinstall file
+  UPSTREAM_WORKSPACE: ".ci.rosinstall"
   ROS_DISTRO: "melodic"
   ROS_REPO: "ros"
 
-  # install the rll_sdk
-  ROSINSTALL_SDK: "- git: {local-name: rll_sdk, uri: 'https://gitlab.ipr.kit.edu/rll/rll_sdk.git', version: master}"
-  ROSINSTALL_DEFAULT: ${ROSINSTALL_SDK}
+  # rosinstall file content to ensure the rll_sdk dependency is installed
+  PROJECT_ROSINSTALL_FILENAME: ".ci.rosinstall" # Used to generate the file if it does not exist
+  ROSINSTALL_SDK: "{repositories: {rll_sdk: {type: git, url: 'https://gitlab.ipr.kit.edu/rll/rll_sdk.git', version: master}}}"
+  ROSINSTALL_SDK_TEMPLATE: ${ROSINSTALL_SDK}
 
 
 before_script:
   - apk add --update bash coreutils tar # install industrial_ci dependencies
   - git clone --quiet --depth 1 https://github.com/ros-industrial/industrial_ci .industrial_ci
   # create the .rosinstall file if it does not exist
-  - test ! -f ${ROSINSTALL_FILENAME} && echo ${ROSINSTALL_DEFAULT} >> ${ROSINSTALL_FILENAME}
-  - sed -i 's/https\:\/\/gitlab\.ipr\.kit\.edu/https\:\/\/gitlab-ci-token\:'${CI_JOB_TOKEN}'\@gitlab\.ipr\.kit\.edu/g' ${CI_PROJECT_DIR}/${ROSINSTALL_FILENAME}
+  - test ! -f ${PROJECT_ROSINSTALL_FILENAME} && echo ${ROSINSTALL_SDK_TEMPLATE} >> ${PROJECT_ROSINSTALL_FILENAME}
+  - sed -i 's/https\:\/\/gitlab\.ipr\.kit\.edu/https\:\/\/gitlab-ci-token\:'${CI_JOB_TOKEN}'\@gitlab\.ipr\.kit\.edu/g' ${CI_PROJECT_DIR}/${PROJECT_ROSINSTALL_FILENAME}
   # download config files if they do not exist
   - test ! -f .clang-format && wget https://gitlab.ipr.kit.edu/rll/rll_sdk/raw/master/.clang-format
   - test ! -f .clang-tidy && wget https://gitlab.ipr.kit.edu/rll/rll_sdk/raw/master/.clang-tidy
@@ -69,7 +70,7 @@ warningbuild-linting:
     ADDITIONAL_DEBS: "python-pip clang-tidy-7 clang-7"
     CATKIN_LINT: "pedantic"
     CATKIN_LINT_ARGS: "--ignore unknown_package --ignore unknown_depend"
-    CATKIN_CONFIG: "--cmake-args -DCMAKE_CXX_FLAGS=-Werror"
+    CMAKE_ARGS: "-DCMAKE_CXX_FLAGS=-Werror"
     NOT_TEST_BUILD: "true"
     AFTER_SCRIPT: .ci/linting.sh
   # run default -> build
