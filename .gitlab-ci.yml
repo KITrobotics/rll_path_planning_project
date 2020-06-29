@@ -52,6 +52,7 @@ format-check:
 kinetic-build-rostests:
   variables:
     ROS_DISTRO: "kinetic" # override ROS_DISTRO variable
+    AFTER_SETUP_UPSTREAM_WORKSPACE: "apt -yq install python-pip && pip -q install typing"
   # run default -> build
   script: .industrial_ci/gitlab.sh
   tags:

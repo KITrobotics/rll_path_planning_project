@@ -34,9 +34,9 @@ def plan_to_goal(_):
 
     # printing input values
     rospy.loginfo("start pose: x %f, y %f, theta %f",
-                  pose_start.x, pose_start.y, pose_start.z)
+                  pose_start.x, pose_start.y, pose_start.theta)
     rospy.loginfo("goal pose: x %f, y %f, theta %f",
-                  pose_goal.x, pose_goal.y, pose_goal.z)
+                  pose_goal.x, pose_goal.y, pose_goal.theta)
 
     # Output: movement commands
     pose_check_start = pose_start
