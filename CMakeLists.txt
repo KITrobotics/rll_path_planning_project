@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   rll_move
   rll_move_client
   rll_msgs
+  rostest
   std_msgs
 )
 
@@ -41,3 +42,7 @@ catkin_install_python(PROGRAMS scripts/path_planner.py
 install(TARGETS planning_iface
         RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(DIRECTORY config launch meshes urdf DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+
+if(CATKIN_ENABLE_TESTING)
+  add_rostest(tests/launch/tests_python.test)
+endif()

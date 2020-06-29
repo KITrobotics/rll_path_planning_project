@@ -69,3 +69,6 @@ CVS/*
 *.kdev_include_paths
 *.orig
 .idea/
+.vscode/
+
+*.pyc

@@ -17,6 +17,7 @@
   <depend>rll_msgs</depend>
   <depend>rll_move</depend>
   <depend>rll_move_client</depend>
+  <build_depend>rostest</build_depend>
   <exec_depend>message_runtime</exec_depend>
   <buildtool_depend>catkin</buildtool_depend>
 
