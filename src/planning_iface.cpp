@@ -402,9 +402,8 @@ bool PlanningIfaceBase::checkPathSrv(rll_planning_project::CheckPath::Request& r
   if (error_code.failed())
   {
     ROS_INFO("checkPathSrv call failed with: %s", error_code.message());
+    resp.valid = RLL_SRV_FALSE;
   }
-
-  resp.valid = error_code.succeededSrv();
 
   return true;
 }

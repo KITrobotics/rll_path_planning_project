@@ -45,7 +45,7 @@ The Python node with the path planning algorithm is launched with:
 `roslaunch rll_planning_project path_planner.launch`
 
 A single planning and path execution run can be initiated with:   
-`roslaunch rll_project_runner run_project.launch`
+`roslaunch rll_tools run_project.launch`
 
 The example path planning code with exemplary calls to the ```Move``` and ```CheckPath``` services can be found in ```./scripts/path_planner.py```.
 
