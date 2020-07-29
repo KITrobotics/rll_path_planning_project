@@ -25,9 +25,11 @@
       </geometry>
     </collision>
   </link>
+
   <gazebo reference="grasp_object">
-    <mu1>1.0</mu1>
-    <mu2>1.0</mu2>
+    <mu1>10.0</mu1>
+    <mu2>10.0</mu2>
+    <maxVel>0.0</maxVel>
     <material>Gazebo/Blue</material>
   </gazebo>
 
