@@ -82,7 +82,7 @@ void PlanningIfaceBase::insertGraspObject()
   box_pose.position.x = start_pose_grip_.position.x;
   box_pose.position.y = start_pose_grip_.position.y;
   // ensure a vertical safety distance
-  box_pose.position.z = primitive.dimensions[2] / 2 - 0.005;
+  box_pose.position.z = primitive.dimensions[2] / 2 + 0.005;
   box_pose.orientation = start_pose_grip_.orientation;
   grasp_object_.primitives.push_back(primitive);
   grasp_object_.primitive_poses.push_back(box_pose);
@@ -352,7 +352,6 @@ RLLErrorCode PlanningIfaceBase::move(const rll_planning_project::Move::Request& 
 {
   geometry_msgs::Pose pose3d_goal;
   geometry_msgs::Pose2D pose2d_cur;
-  std::vector<geometry_msgs::Pose> waypoints;
   moveit_msgs::RobotTrajectory trajectory;
   float move_dist, dist_rot;
 
@@ -366,19 +365,10 @@ RLLErrorCode PlanningIfaceBase::move(const rll_planning_project::Move::Request& 
     return RLLErrorCode::TOO_FEW_WAYPOINTS;
   }
 
-  if (move_dist < DEFAULT_LINEAR_EEF_STEP)
-  {
-    // generate more rotation points here to ensure that there are at least ten
-    // for the continuity check
-    float rot_step_size = (pose2d_cur.theta - req.pose.theta) / LINEAR_MIN_STEPS_FOR_JUMP_THRESH;
-    generateRotationWaypoints(pose2d_cur, rot_step_size, &waypoints);
-  }
-
   ROS_INFO("move request to pos x=%.3f y=%.3f theta=%.3f", req.pose.x, req.pose.y, req.pose.theta);
   manip_move_group_.setStartStateToCurrentState();
   pose2dToPose3d(req.pose, &pose3d_goal);
-  waypoints.push_back(pose3d_goal);
-  RLLErrorCode error_code = computeLinearPath(waypoints, &trajectory);
+  RLLErrorCode error_code = computeLinearPath(pose3d_goal, &trajectory);
   if (error_code.failed())
   {
     ROS_ERROR("computing path failed, move dist %f, dist rot %f", move_dist, dist_rot);
@@ -523,7 +513,7 @@ bool PlanningIfaceBase::checkGoalState()
 
     // move a little higher after placing the object
     move_lin_req.pose = reset_above_goal;
-    moveLin(move_lin_req, &move_lin_resp);
+    error_code = moveLin(move_lin_req, &move_lin_resp);
     if (error_code.failed())
     {
       ROS_FATAL("Moving above maze for reset to home failed");
