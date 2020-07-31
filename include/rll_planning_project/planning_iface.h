@@ -56,7 +56,7 @@ private:
   const float GOAL_TOLERANCE_ROT = 10 * M_PI / 180;
   const float VERT_GROUND_CLEARANCE = 0.05;
   const float VERT_GRIP_HEIGHT = 0.01;
-  const float POSE_Z_ABOVE_MAZE = 0.15;
+  const float POSE_Z_ABOVE_MAZE = 0.2;
 
   bool grasp_object_at_goal_;
   Permissions::Index plan_permission_;
