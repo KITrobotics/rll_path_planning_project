@@ -382,24 +382,32 @@ bool PlanningIfaceBase::checkPathSrv(rll_planning_project::CheckPath::Request& r
                                      rll_planning_project::CheckPath::Response& resp)
 {
   RLLErrorCode error_code = beforeNonMovementServiceCall(CHECK_PATH_SRV_NAME);
+  bool valid = false;
   if (error_code.succeeded())
   {
-    checkPath(req, &resp);
+    valid = checkPath(req);
   }
 
   error_code = afterNonMovementServiceCall(CHECK_PATH_SRV_NAME, error_code);
-
   if (error_code.failed())
   {
     ROS_INFO("checkPathSrv call failed with: %s", error_code.message());
-    resp.valid = RLL_SRV_FALSE;
   }
+
+  // if the trajectory is not valid but the service call was successful change
+  // set the error code to INVALID_INPUT. It would good to have a custom error code here
+  if (error_code.succeeded() && !valid)
+  {
+    error_code = RLLErrorCode::INVALID_INPUT;
+  }
+
+  resp.success = error_code.succeededSrv();
+  resp.error_code = error_code.value();
 
   return true;
 }
 
-bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request& req,
-                                  rll_planning_project::CheckPath::Response* resp)
+bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request& req)
 {
   geometry_msgs::Pose pose3d_start, pose3d_goal;
   std::vector<geometry_msgs::Pose> waypoints;
@@ -414,8 +422,7 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
     ROS_WARN("check path requests that cover a distance between 0 and 5 mm or sole rotations less than 20 degrees are "
              "not supported!");
     ROS_WARN("Moving distance would have been %f m", move_dist);
-    resp->valid = RLL_SRV_FALSE;
-    return true;
+    return false;
   }
 
   if (move_dist <= POSITIVE_ZERO)
@@ -434,8 +441,7 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
 
   if (!start_pose_valid)
   {
-    resp->valid = RLL_SRV_FALSE;
-    return true;
+    return false;
   }
 
   manip_move_group_.setStartState(*check_path_start_state_);
@@ -445,8 +451,7 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
                                                            DEFAULT_LINEAR_JUMP_THRESHOLD, trajectory);
   if (achieved < 1)
   {
-    resp->valid = RLL_SRV_FALSE;
-    return true;
+    return false;
   }
 
   if (trajectory.joint_trajectory.points.size() < LINEAR_MIN_STEPS_FOR_JUMP_THRESH)
@@ -454,11 +459,9 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
     ROS_ERROR("trajectory has not enough points to check for continuity, only got %lu",
               trajectory.joint_trajectory.points.size());
     ROS_ERROR("move dist %f, dist rot %f", move_dist, dist_rot);
-    resp->valid = RLL_SRV_FALSE;
-    return true;
+    return false;
   }
 
-  resp->valid = RLL_SRV_TRUE;
   return true;
 }
 

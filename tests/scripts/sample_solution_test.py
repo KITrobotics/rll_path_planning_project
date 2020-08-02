@@ -24,7 +24,7 @@ import sys
 import rospy
 
 from rll_tools.run import run_project_in_background
-from rll_move_client.client import RLLDefaultMoveClient
+from rll_planning_project_iface.client import RLLPlanningProjectClient
 
 # Hackish: add the path_planner script to the path manually
 SCRIPT_PATH = abspath(dirname(abspath(__file__)) + "../../../scripts/")
@@ -48,6 +48,6 @@ class TestSampleSolution(unittest.TestCase):
         return result
 
     def test_run_script(self):
-        client = RLLDefaultMoveClient(self._run_script_for_result)
+        client = RLLPlanningProjectClient(self._run_script_for_result)
         run_project_in_background(8)
         client.spin()

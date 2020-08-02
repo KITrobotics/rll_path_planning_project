@@ -42,7 +42,7 @@ protected:
   void runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult* result) override;
   bool getStartGoalSrv(  // NOLINTNEXTLINE google-runtime-references
       rll_planning_project::GetStartGoal::Request& req, rll_planning_project::GetStartGoal::Response& resp);
-  bool checkPath(const rll_planning_project::CheckPath::Request& req, rll_planning_project::CheckPath::Response* resp);
+  bool checkPath(const rll_planning_project::CheckPath::Request& req);
   RLLErrorCode move(const rll_planning_project::Move::Request& req, rll_planning_project::Move::Response* /*resp*/);
 
   void registerPermissions();
