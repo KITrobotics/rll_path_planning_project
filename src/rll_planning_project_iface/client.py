@@ -2,6 +2,7 @@ from typing import Tuple  # pylint: disable=unused-import
 import rospy
 from geometry_msgs.msg import Pose2D  # pylint: disable=unused-import
 from rll_move_client.client import RLLBasicMoveClient, RLLMoveClientListener
+from rll_move_client.formatting import override_formatting_for_ros_types
 from rll_planning_project.srv import CheckPath, GetStartGoal, Move
 
 
@@ -20,6 +21,8 @@ class RLLPlanningProjectClient(RLLBasicMoveClient, RLLMoveClientListener):
         self.move_srv = rospy.ServiceProxy('move', Move)
         self.check_srv = rospy.ServiceProxy(
             'check_path', CheckPath, persistent=True)
+
+        override_formatting_for_ros_types()
 
     def move(self, pose):
         # type: (Pose2D) -> bool
@@ -49,5 +52,5 @@ class RLLPlanningProjectClient(RLLBasicMoveClient, RLLMoveClientListener):
 
         return self._call_service_with_error_check(
             self.check_srv, self.CHECK_PATH_SRV_NAME,
-            "%s requested from %s to %s", self._handle_response_error_code,
+            "%s requested from '%s' to '%s'", self._handle_response_error_code,
             pose_a, pose_b)
