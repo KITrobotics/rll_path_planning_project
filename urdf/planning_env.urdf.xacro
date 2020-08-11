@@ -13,7 +13,7 @@
   <!-- Insert the maze -->
 
   <joint name="maze" type="fixed">
-    <parent link="world" />
+    <parent link="table" />
     <child link="maze" />
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
