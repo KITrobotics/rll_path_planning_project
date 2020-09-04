@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import rospy
 from geometry_msgs.msg import Pose2D
@@ -30,14 +31,22 @@ def plan_to_goal(client):
     # Implement your path planning algorithm here #
     ###############################################
 
-    ###############################################
-    # Example on how to use chech_path functionality
-
     path = []
-    motions = [[0.1, 0, 0], [-0.1, 0, 0],
-               [0, 0.1, 0], [0, -0.1, 0],
-               [0, 0.1, 1.57], [0.1, 0, -1.57]]
 
+    # example motions for the gripper
+    motions = [
+        # movement by 0.1m in positive or negative x-direction
+        [0.1, 0, 0], [-0.1, 0, 0],
+        # movement by 0.1m in positive or negative y-direction
+        [0, 0.1, 0], [0, -0.1, 0],
+        # rotation on the spot by 90°, clockwise or counterclockwise
+        [0, 0, 1.57], [0, 0, 1.57],
+        # rotation by 90° and movement into y or x direction (grinding curves)
+        [0, 0.1, 1.57], [0.1, 0, -1.57]]
+
+    ###############################################
+    # Example on how to use check_path functionality
+    ################################################
     for motion in motions:
 
         newx = start_pose.x + motion[0]
@@ -46,12 +55,12 @@ def plan_to_goal(client):
         new_pose = Pose2D(newx, newy, newtheta)
         if client.check_path(start_pose, new_pose):
             path.append(new_pose)
-    ################################################
 
     if path is not None:
         rospy.loginfo("A path was found, now trying to execute it")
         for point in path:
             client.move(point)
+
         return True
 
     rospy.loginfo("No path to goal found")

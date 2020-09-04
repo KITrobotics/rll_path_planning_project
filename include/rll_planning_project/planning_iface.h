@@ -59,6 +59,7 @@ private:
   const float POSE_Z_ABOVE_MAZE = 0.2;
 
   bool grasp_object_at_goal_;
+  bool move_command_failed_;
   Permissions::Index plan_permission_;
   moveit_msgs::CollisionObject grasp_object_;
   geometry_msgs::Pose start_pose_grip_, start_pose_above_;
@@ -67,9 +68,11 @@ private:
   robot_state::RobotState* check_path_start_state_;
 
   void insertGraspObject();
+  void resetGraspObject();
   RLLErrorCode resetToStart();
   bool runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult* result);
   bool checkGoalState();
+  bool writeResult(rll_msgs::JobEnvResult* result);
   void diffCurrentState(const geometry_msgs::Pose2D& pose_des, float* diff_trans, float* diff_rot,
                         geometry_msgs::Pose2D* pose2d_cur);
   void pose2dToPose3d(const geometry_msgs::Pose2D& pose2d, geometry_msgs::Pose* pose3d);

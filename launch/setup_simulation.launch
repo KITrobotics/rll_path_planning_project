@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+ <arg name="headless" default="false"/>
+ <arg name="gazebo_gui" default="false"/>
+
+ <include file="$(find rll_planning_project)/launch/moveit_planning_execution.launch">
+    <arg name="headless" value="$(arg headless)"/>
+    <arg name="gazebo_gui" value="$(arg gazebo_gui)"/>
+  </include>
+
+ <include file="$(find rll_planning_project)/launch/planning_iface.launch"></include>
+
+</launch>
