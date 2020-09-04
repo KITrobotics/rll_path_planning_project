@@ -26,7 +26,6 @@ class RLLPlanningProjectClient(RLLBasicMoveClient, RLLMoveClientListener):
 
     def move(self, pose):
         # type: (Pose2D) -> bool
-
         return self._call_service_with_error_check(
             self.move_srv,
             self.MOVE_SRV_NAME,

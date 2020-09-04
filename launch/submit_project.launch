@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+
+  <include file="$(find rll_tools)/launch/submit_project.launch">
+    <arg name="project" value="rll_planning_project"/>
+  </include>
+
+</launch>

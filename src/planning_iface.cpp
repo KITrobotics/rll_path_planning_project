@@ -18,6 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <gazebo_msgs/SetModelState.h>
 #include <geometric_shapes/shape_operations.h>
 #include <tf/tf.h>
 #include <tf/transform_datatypes.h>
@@ -55,6 +56,7 @@ PlanningIfaceBase::PlanningIfaceBase(const ros::NodeHandle& nh) : RLLMoveIfaceBa
   insertGraspObject();
 
   grasp_object_at_goal_ = false;
+  move_command_failed_ = false;
   registerPermissions();
 }
 
@@ -123,6 +125,32 @@ void PlanningIfaceBase::insertGraspObject()
   disableCollision(grasp_object_.id, "table");
 }
 
+void PlanningIfaceBase::resetGraspObject()
+{
+  if (!ros::service::exists("gazebo/set_model_state", true))
+  {
+    return;
+  }
+
+  ros::ServiceClient set_model_state = nh_.serviceClient<gazebo_msgs::SetModelState>("gazebo/set_model_state");
+
+  gazebo_msgs::SetModelState obj_state;
+
+  obj_state.request.model_state.model_name = "grasp_object";
+  obj_state.request.model_state.pose.position.x = start_pose_2d_.x;
+  obj_state.request.model_state.pose.position.y = start_pose_2d_.y;
+
+  bool success = set_model_state.call(obj_state);
+  if (!success)
+  {
+    ROS_WARN("Failed to reset grasp object position in simulation");
+  }
+  else
+  {
+    ROS_INFO("Reset grasp object position in simulation");
+  }
+}
+
 void PlanningIfaceBase::runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult* result)
 {
   bool run_three_times = false;
@@ -188,7 +216,7 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
   rll_msgs::PickPlace::Request pick_place_req;
   rll_msgs::PickPlace::Response pick_place_resp;
 
-  // reset grasp object position
+  // reset grasp object position in planning scene
   bool success = planning_scene_interface_.applyCollisionObject(grasp_object_);
   if (!success)
   {
@@ -196,8 +224,10 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
   }
   else
   {
-    ROS_INFO("Reset grasp object pos");
+    ROS_INFO("Reset grasp object position");
   }
+  // reset grasp object position in simulation
+  resetGraspObject();
 
   // pick up the grasp object
   move_ptp_req.pose = start_pose_above_;
@@ -231,7 +261,6 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
   ROS_INFO("calling the planning service\n");
   success = runClient(goal, result);
   permissions_.restorePreviousPermissions();
-
   if (success)
   {
     ROS_INFO("successfully called the planning service, planning and moving took %d minutes and %d seconds",
@@ -240,6 +269,7 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
   else
   {
     ROS_WARN("called the planning service with error");
+    return false;
   }
 
   success = checkGoalState();
@@ -248,13 +278,24 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
     result->job.status = rll_msgs::JobStatus::INTERNAL_ERROR;
     return false;
   }
+  return writeResult(result);
+}
 
+bool PlanningIfaceBase::writeResult(rll_msgs::JobEnvResult* result)
+{
+  if (move_command_failed_)
+  {
+    result->job.status = rll_msgs::JobStatus::FAILURE;
+    result->job.status_detail = "Move command has failed";
+    return false;
+  }
   if (!grasp_object_at_goal_)
   {
     result->job.status = rll_msgs::JobStatus::FAILURE;
-    return false;
+    result->job.status_detail = "Goal was not reached";
+    return true;
   }
-
+  result->job.status_detail = "Goal was reached successfully";
   return true;
 }
 
@@ -350,6 +391,12 @@ bool PlanningIfaceBase::moveSrv(rll_planning_project::Move::Request& req, rll_pl
 RLLErrorCode PlanningIfaceBase::move(const rll_planning_project::Move::Request& req,
                                      rll_planning_project::Move::Response* /*resp*/)
 {
+  if (move_command_failed_)
+  {
+    ROS_ERROR("Previous move command has failed, not executing this move command");
+    return RLLErrorCode::PROJECT_SPECIFIC_RECOVERABLE_1;
+  }
+
   geometry_msgs::Pose pose3d_goal;
   geometry_msgs::Pose2D pose2d_cur;
   moveit_msgs::RobotTrajectory trajectory;
@@ -362,6 +409,7 @@ RLLErrorCode PlanningIfaceBase::move(const rll_planning_project::Move::Request& 
   {
     ROS_WARN("move commands that cover a distance between 0 and 5 mm or sole rotations less than 20 degrees are not "
              "supported!");
+    move_command_failed_ = true;
     return RLLErrorCode::TOO_FEW_WAYPOINTS;
   }
 
@@ -372,10 +420,16 @@ RLLErrorCode PlanningIfaceBase::move(const rll_planning_project::Move::Request& 
   if (error_code.failed())
   {
     ROS_ERROR("computing path failed, move dist %f, dist rot %f", move_dist, dist_rot);
+    move_command_failed_ = true;
     return error_code;
   }
 
-  return runLinearTrajectory(trajectory);
+  error_code = runLinearTrajectory(trajectory);
+  if (error_code.failed())
+  {
+    move_command_failed_ = true;
+  }
+  return error_code;
 }
 
 bool PlanningIfaceBase::checkPathSrv(rll_planning_project::CheckPath::Request& req,
@@ -581,6 +635,9 @@ RLLErrorCode PlanningIfaceBase::resetToStart()
   rll_msgs::PickPlace::Request pick_place_req;
   rll_msgs::PickPlace::Response pick_place_resp;
   geometry_msgs::Pose current_pose = manip_move_group_.getCurrentPose().pose;
+
+  // reset move command failed flag
+  move_command_failed_ = false;
 
   // set this a little higher to make sure we are moving above the maze
   current_pose.position.z = POSE_Z_ABOVE_MAZE;
