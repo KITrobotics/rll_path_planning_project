@@ -21,14 +21,20 @@
 import rospy
 import rosunit
 
-from sample_solution_test import TestSampleSolution
+from rll_move_client.tests_demo_launcher import create_test_class
 
 
 def main():
-    rospy.init_node("tests_python")
+    rospy.init_node("demo_tests_python")
 
-    rosunit.unitrun("rll_planning_project",
-                    "solution_test", TestSampleSolution)
+    to_import = [("rll_planning_project", "scripts/"),
+                 ("rll_planning_project", "src")]
+
+    klass = create_test_class(to_import, "path_planner", "plan_to_goal",
+                              "rll_planning_project_iface.client",
+                              "RLLPlanningProjectClient")
+
+    rosunit.unitrun("rll_planning_project", "demo_tests_python", klass)
 
 
 if __name__ == "__main__":

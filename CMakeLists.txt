@@ -46,5 +46,6 @@ install(TARGETS planning_iface
 install(DIRECTORY config launch meshes urdf DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 
 if(CATKIN_ENABLE_TESTING)
-  add_rostest(tests/launch/tests_python.test)
+  # Run demo tests with and without gazebo
+  add_rostest(tests/launch/demo_tests_python.test)
 endif()
