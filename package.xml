@@ -19,6 +19,8 @@
   <depend>rll_move_client</depend>
   <build_depend>rostest</build_depend>
   <exec_depend>message_runtime</exec_depend>
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>rll_moveit_config</exec_depend>
   <buildtool_depend>catkin</buildtool_depend>
 
 </package>

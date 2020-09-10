@@ -1,0 +1,17 @@
+<launch>
+    <arg name="robot" default="iiwa"/>
+    <arg name="headless" default="true"/>
+    <arg name="use_sim" default="true"/>
+
+    <include file="$(find rll_planning_project)/launch/moveit_planning_execution.launch">
+        <arg name="headless" value="$(arg headless)"/>
+        <arg name="use_sim" value="$(arg use_sim)"/>
+    </include>
+
+    <include file="$(find rll_planning_project)/launch/planning_iface.launch">
+        <arg name="headless" value="$(arg headless)"/>
+    </include>
+
+    <test ns="$(arg robot)" test-name="demo_tests_python" pkg="rll_planning_project"
+          type="demo_tests_main.py" time-limit="240"/>
+</launch>
