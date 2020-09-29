@@ -22,7 +22,7 @@ variables:
 
   # repos file content to ensure the rll_sdk dependency is installed
   PROJECT_REPOS_FILENAME: ".ci.repos" # Used to generate the file if it does not exist
-  REPOS_SDK: "{repositories: {rll_sdk: {type: git, url: 'https://gitlab.ipr.kit.edu/rll/rll_sdk.git', version: 'master'}}}"
+  REPOS_SDK: "{repositories: {rll_sdk: {type: git, url: 'https://gitlab.ipr.kit.edu/weinreuter/rll_sdk.git', version: 'gripper-refactoring'}}}"
 
 
 before_script:

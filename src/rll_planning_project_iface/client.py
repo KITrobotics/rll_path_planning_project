@@ -2,6 +2,7 @@ from typing import Tuple  # pylint: disable=unused-import
 import rospy
 from geometry_msgs.msg import Pose2D  # pylint: disable=unused-import
 from rll_move_client.client import RLLBasicMoveClient, RLLMoveClientListener
+from rll_move_client.error import RLLErrorCode
 from rll_move_client.formatting import override_formatting_for_ros_types
 from rll_planning_project.srv import CheckPath, GetStartGoal, Move
 
@@ -21,6 +22,22 @@ class RLLPlanningProjectClient(RLLBasicMoveClient, RLLMoveClientListener):
         self.move_srv = rospy.ServiceProxy('move', Move)
         self.check_srv = rospy.ServiceProxy(
             'check_path', CheckPath, persistent=True)
+
+        RLLErrorCode.set_error_code_details(
+            RLLErrorCode.PROJECT_SPECIFIC_RECOVERABLE_1,
+            "PREVIOUS_MOVE_FAILED",
+            "A previous move service call failed. As a result all further move"
+            " service calls will be rejected. Please verify that a movement is"
+            " possible by calling check_path first.")
+
+        RLLErrorCode.set_error_code_details(
+            RLLErrorCode.PROJECT_SPECIFIC_INVALID_1,
+            "TOO_LITTLE_MOVEMENT",
+            "Requests that cover a distance between 0 and 5 mm or sole "
+            "rotations less than 20 degrees are not supported!")
+
+        RLLErrorCode.set_error_code_details(
+            RLLErrorCode.PROJECT_SPECIFIC_INVALID_2, "NO_PATH_FOUND", None)
 
         override_formatting_for_ros_types()
 
