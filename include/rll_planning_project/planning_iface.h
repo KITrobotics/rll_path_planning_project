@@ -22,11 +22,13 @@
 #define RLL_PLANNING_PROJECT_PLANNING_IFACE_H
 
 #include <rll_move/move_iface_base.h>
+#include <rll_move/move_iface_gripper.h>
+
 #include <rll_planning_project/CheckPath.h>
 #include <rll_planning_project/GetStartGoal.h>
 #include <rll_planning_project/Move.h>
 
-class PlanningIfaceBase : public RLLMoveIfaceBase
+class PlanningIfaceBase : public virtual RLLMoveIfaceGripperServices, public RLLMoveIfaceBase
 {
 public:
   explicit PlanningIfaceBase(const ros::NodeHandle& nh);
@@ -42,7 +44,7 @@ protected:
   void runJob(const rll_msgs::JobEnvGoalConstPtr& goal, rll_msgs::JobEnvResult* result) override;
   bool getStartGoalSrv(  // NOLINTNEXTLINE google-runtime-references
       rll_planning_project::GetStartGoal::Request& req, rll_planning_project::GetStartGoal::Response& resp);
-  bool checkPath(const rll_planning_project::CheckPath::Request& req);
+  RLLErrorCode checkPath(const rll_planning_project::CheckPath::Request& req);
   RLLErrorCode move(const rll_planning_project::Move::Request& req, rll_planning_project::Move::Response* /*resp*/);
 
   void registerPermissions();

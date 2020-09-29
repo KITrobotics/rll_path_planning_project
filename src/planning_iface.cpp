@@ -20,11 +20,11 @@
 
 #include <gazebo_msgs/SetModelState.h>
 #include <geometric_shapes/shape_operations.h>
+#include <rll_move/grasp_util.h>
+#include <rll_planning_project/planning_iface.h>
 #include <tf/tf.h>
 #include <tf/transform_datatypes.h>
 #include <visualization_msgs/Marker.h>
-
-#include <rll_planning_project/planning_iface.h>
 
 PlanningIfaceBase::PlanningIfaceBase(const ros::NodeHandle& nh) : RLLMoveIfaceBase(nh)
 {
@@ -62,7 +62,6 @@ PlanningIfaceBase::PlanningIfaceBase(const ros::NodeHandle& nh) : RLLMoveIfaceBa
 
 void PlanningIfaceBase::insertGraspObject()
 {
-  shape_msgs::SolidPrimitive primitive;
   geometry_msgs::Pose box_pose;
   visualization_msgs::Marker marker;
   float grasp_object_dim_x, grasp_object_dim_y, grasp_object_dim_z;
@@ -73,22 +72,19 @@ void PlanningIfaceBase::insertGraspObject()
   ros::param::get(node_name_ + "/grasp_object_dim_y", grasp_object_dim_y);
   ros::param::get(node_name_ + "/grasp_object_dim_z", grasp_object_dim_z);
 
-  // add the grasp object as a collision object into the scene
-  grasp_object_.header.frame_id = manip_move_group_.getPlanningFrame();
-  grasp_object_.id = "grasp_object";
-  primitive.type = primitive.BOX;
-  primitive.dimensions.resize(3);
-  primitive.dimensions[0] = grasp_object_dim_x + 0.02;
-  primitive.dimensions[1] = grasp_object_dim_y + 0.02;
-  primitive.dimensions[2] = grasp_object_dim_z + 0.001;
+  float box_height = grasp_object_dim_z + 0.001;
   box_pose.position.x = start_pose_grip_.position.x;
   box_pose.position.y = start_pose_grip_.position.y;
-  // ensure a vertical safety distance
-  box_pose.position.z = primitive.dimensions[2] / 2 + 0.005;
+  box_pose.position.z = 0;
   box_pose.orientation = start_pose_grip_.orientation;
-  grasp_object_.primitives.push_back(primitive);
-  grasp_object_.primitive_poses.push_back(box_pose);
-  grasp_object_.operation = grasp_object_.ADD;
+
+  CollisionObjectBuilder builder;
+  grasp_object_ = builder.addBox(grasp_object_dim_x + 0.02, grasp_object_dim_y + 0.02, box_height)
+                      .setPose(box_pose)
+                      .positionBottomAtZ(box_height, 0.001)  // ensure a vertical safety distance
+                      .build("grasp_object", manip_move_group_.getPlanningFrame());
+
+  registerGraspObject(std::make_unique<BoxGraspObject>(), grasp_object_);
 
   // Publish a marker at goal pose
   ros::Publisher marker_pub = nh_.advertise<visualization_msgs::Marker>("visualization_marker", 1);
@@ -101,9 +97,9 @@ void PlanningIfaceBase::insertGraspObject()
   marker.pose = goal_pose_grip_;
   marker.pose.position.z = box_pose.position.z;
   // Marker dimensions = grasping object dimensions
-  marker.scale.x = primitive.dimensions[0];
-  marker.scale.y = primitive.dimensions[1];
-  marker.scale.z = primitive.dimensions[2];
+  marker.scale.x = grasp_object_.primitives[0].dimensions[0];
+  marker.scale.y = grasp_object_.primitives[0].dimensions[1];
+  marker.scale.z = grasp_object_.primitives[0].dimensions[2];
   // color red
   marker.color.r = 1;
   marker.color.g = 0;
@@ -119,10 +115,6 @@ void PlanningIfaceBase::insertGraspObject()
     ros::Duration(1.0).sleep();
   }
   marker_pub.publish(marker);
-
-  planning_scene_interface_.applyCollisionObject(grasp_object_);
-  // allow these collisions for collision checks in the move iface
-  disableCollision(grasp_object_.id, "table");
 }
 
 void PlanningIfaceBase::resetGraspObject()
@@ -240,7 +232,8 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
     return false;
   }
 
-  pick_place_req.pose_above = start_pose_above_;
+  pick_place_req.pose_approach = start_pose_above_;
+  pick_place_req.pose_retreat = start_pose_above_;
   pick_place_req.pose_grip = start_pose_grip_;
   pick_place_req.gripper_close = RLL_SRV_TRUE;
   pick_place_req.grasp_object = grasp_object_.id;
@@ -258,6 +251,7 @@ bool PlanningIfaceBase::runPlannerOnce(const rll_msgs::JobEnvGoalConstPtr& goal,
 
   permissions_.storeCurrentPermissions();
   permissions_.updateCurrentPermissions(plan_permission_, true);
+
   ROS_INFO("calling the planning service\n");
   success = runClient(goal, result);
   permissions_.restorePreviousPermissions();
@@ -319,7 +313,8 @@ RLLErrorCode PlanningIfaceBase::idle()
       return error_code;
     }
 
-    pick_place_req.pose_above = goal_pose_above_;
+    pick_place_req.pose_approach = goal_pose_above_;
+    pick_place_req.pose_retreat = goal_pose_above_;
     pick_place_req.pose_grip = goal_pose_grip_;
     pick_place_req.gripper_close = RLL_SRV_TRUE;
     pick_place_req.grasp_object = grasp_object_.id;
@@ -351,6 +346,7 @@ void PlanningIfaceBase::registerPermissions()
   // robot ready service check is always allowed
   permissions_.setRequiredPermissionsFor(RLLMoveIfaceServices::ROBOT_READY_SRV_NAME,
                                          Permissions::NO_PERMISSION_REQUIRED);
+  permissions_.setRequiredPermissionsFor(RLLMoveIfaceBase::JOB_FINISHED_SRV_NAME, Permissions::NO_PERMISSION_REQUIRED);
 }
 
 void PlanningIfaceBase::generateRotationWaypoints(const geometry_msgs::Pose2D& pose2d_start, float rot_step_size,
@@ -369,7 +365,7 @@ void PlanningIfaceBase::generateRotationWaypoints(const geometry_msgs::Pose2D& p
 bool PlanningIfaceBase::getStartGoalSrv(rll_planning_project::GetStartGoal::Request& /*req*/,
                                         rll_planning_project::GetStartGoal::Response& resp)
 {
-  RLLErrorCode error_code = beforeNonMovementServiceCall(GET_START_GOAL_SRV_NAME);
+  RLLErrorCode error_code = beforeServiceCall(GET_START_GOAL_SRV_NAME);
 
   if (error_code.succeeded())
   {
@@ -377,7 +373,7 @@ bool PlanningIfaceBase::getStartGoalSrv(rll_planning_project::GetStartGoal::Requ
     resp.goal = goal_pose_2d_;
   }
 
-  error_code = afterNonMovementServiceCall(GET_START_GOAL_SRV_NAME, error_code);
+  error_code = afterServiceCall(GET_START_GOAL_SRV_NAME, error_code);
   resp.error_code = error_code.value();
   resp.success = error_code.succeededSrv();
   return true;
@@ -435,38 +431,37 @@ RLLErrorCode PlanningIfaceBase::move(const rll_planning_project::Move::Request& 
 bool PlanningIfaceBase::checkPathSrv(rll_planning_project::CheckPath::Request& req,
                                      rll_planning_project::CheckPath::Response& resp)
 {
-  RLLErrorCode error_code = beforeNonMovementServiceCall(CHECK_PATH_SRV_NAME);
-  bool valid = false;
+  RLLErrorCode error_code = beforeServiceCall(CHECK_PATH_SRV_NAME);
+  RLLErrorCode check_path_error_code = RLLErrorCode::SUCCESS;
+
   if (error_code.succeeded())
   {
-    valid = checkPath(req);
+    check_path_error_code = checkPath(req);
   }
 
-  error_code = afterNonMovementServiceCall(CHECK_PATH_SRV_NAME, error_code);
+  error_code = afterServiceCall(CHECK_PATH_SRV_NAME, error_code);
   if (error_code.failed())
   {
     ROS_INFO("checkPathSrv call failed with: %s", error_code.message());
   }
 
-  // if the trajectory is not valid but the service call was successful change
-  // set the error code to INVALID_INPUT. It would good to have a custom error code here
-  if (error_code.succeeded() && !valid)
-  {
-    error_code = RLLErrorCode::INVALID_INPUT;
-  }
-
+  error_code = error_code.determineWorse(check_path_error_code);
   resp.success = error_code.succeededSrv();
   resp.error_code = error_code.value();
 
   return true;
 }
 
-bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request& req)
+RLLErrorCode PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request& req)
 {
   geometry_msgs::Pose pose3d_start, pose3d_goal;
   std::vector<geometry_msgs::Pose> waypoints;
   moveit_msgs::RobotTrajectory trajectory;
   const double POSITIVE_ZERO = 1E-07;
+
+  // Note on error codes:
+  // PROJECT_SPECIFIC_INVALID_1: too little movement
+  // PROJECT_SPECIFIC_INVALID_2: no path
 
   // enforce a lower bound for check_path requests to ensure that Moveit has enough waypoints
   float move_dist = sqrt(pow(req.pose_start.x - req.pose_goal.x, 2) + pow(req.pose_start.y - req.pose_goal.y, 2));
@@ -476,7 +471,7 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
     ROS_WARN("check path requests that cover a distance between 0 and 5 mm or sole rotations less than 20 degrees are "
              "not supported!");
     ROS_WARN("Moving distance would have been %f m", move_dist);
-    return false;
+    return RLLErrorCode::PROJECT_SPECIFIC_INVALID_1;
   }
 
   if (move_dist <= POSITIVE_ZERO)
@@ -495,7 +490,7 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
 
   if (!start_pose_valid)
   {
-    return false;
+    return RLLErrorCode::INVALID_INPUT;
   }
 
   manip_move_group_.setStartState(*check_path_start_state_);
@@ -505,7 +500,7 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
                                                            DEFAULT_LINEAR_JUMP_THRESHOLD, trajectory);
   if (achieved < 1)
   {
-    return false;
+    return RLLErrorCode::PROJECT_SPECIFIC_INVALID_2;
   }
 
   if (trajectory.joint_trajectory.points.size() < LINEAR_MIN_STEPS_FOR_JUMP_THRESH)
@@ -513,10 +508,10 @@ bool PlanningIfaceBase::checkPath(const rll_planning_project::CheckPath::Request
     ROS_ERROR("trajectory has not enough points to check for continuity, only got %lu",
               trajectory.joint_trajectory.points.size());
     ROS_ERROR("move dist %f, dist rot %f", move_dist, dist_rot);
-    return false;
+    return RLLErrorCode::PROJECT_SPECIFIC_INVALID_1;
   }
 
-  return true;
+  return RLLErrorCode::SUCCESS;
 }
 
 bool PlanningIfaceBase::checkGoalState()
@@ -554,7 +549,8 @@ bool PlanningIfaceBase::checkGoalState()
     ROS_INFO("Goal was reached, good job!\n");
 
     // place the object at the goal
-    pick_place_req.pose_above = goal_pose_above_;
+    pick_place_req.pose_approach = goal_pose_above_;
+    pick_place_req.pose_retreat = goal_pose_above_;
     pick_place_req.pose_grip = goal_pose_grip_;
     pick_place_req.gripper_close = RLL_SRV_FALSE;
     pick_place_req.grasp_object = grasp_object_.id;
@@ -661,8 +657,11 @@ RLLErrorCode PlanningIfaceBase::resetToStart()
     }
   }
 
-  pick_place_req.pose_above = start_pose_above_;
-  pick_place_req.pose_above.position.z = POSE_Z_ABOVE_MAZE;
+  pick_place_req.pose_approach = start_pose_above_;
+  pick_place_req.pose_retreat = start_pose_above_;
+  pick_place_req.pose_approach.position.z = POSE_Z_ABOVE_MAZE;
+  pick_place_req.pose_retreat.position.z = POSE_Z_ABOVE_MAZE;
+
   pick_place_req.pose_grip = start_pose_grip_;
   pick_place_req.gripper_close = RLL_SRV_FALSE;
   pick_place_req.grasp_object = grasp_object_.id;
