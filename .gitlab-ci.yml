@@ -16,8 +16,8 @@ variables:
   # Create a upstream workspace with the dependencies from the specified repos file
   UPSTREAM_WORKSPACE: ".ci.repos"
   ROS_DISTRO: "melodic"
-  ROS_REPO: "testing" # "ros"
-  VERBOSE_OUTPUT: "true"
+  # This causes too much output by default and the Gitlab log output is truncated
+  # VERBOSE_OUTPUT: "true"
   VERBOSE_TESTS: "true"
 
   # repos file content to ensure the rll_sdk dependency is installed
@@ -53,7 +53,6 @@ format-check:
 kinetic-build-rostests:
   variables:
     ROS_DISTRO: "kinetic" # override ROS_DISTRO variable
-    BUILDER: "catkin_make" # catkin_make produces more verbose output during testing than catkin
     AFTER_SETUP_UPSTREAM_WORKSPACE: "apt -yq install python-pip && pip -q install typing"
   # run default -> build
   script: .industrial_ci/gitlab.sh
@@ -62,8 +61,6 @@ kinetic-build-rostests:
 
 
 melodic-build-rostests:
-  variables:
-    BUILDER: "catkin_make" # catkin_make produces more verbose output during testing than catkin
   # run default -> build
   script: .industrial_ci/gitlab.sh
   tags:
